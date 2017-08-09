@@ -93,7 +93,6 @@ namespace HL
 			//条件变量
 			class ConditionVariable {
 				friend class Thread;
-
 				CONDITION_VARIABLE cond_var;
 			public:
 				ConditionVariable() {
@@ -124,6 +123,7 @@ namespace HL
 				}
 				void Lock()
 				{
+					
 					WaitForSingleObject(mutex_ptr, INFINITE);
 				}
 				void Lock(DWORD milisecs) {
@@ -141,6 +141,34 @@ namespace HL
 				}
 			};
 
+			
+			class Volatile
+			{
+				AtomicCounter m_operation_enter_counter = 0;
+				AtomicCounter m_operation_exit_counter = 0;
+				Mutex m_enter;
+			public:
+				//进入操作临界区
+				inline void OperationEnter() {
+					this->m_enter.Lock();
+					++this->m_operation_enter_counter;
+					this->m_enter.UnLock();
+				}
+				//退出操作临界区
+				inline void OperationExit() {
+					++this->m_operation_exit_counter;
+				}
+				//尝试进行操作(宿主)
+				inline void TryLock() {
+					while (m_operation_enter_counter != m_operation_exit_counter)Sleep(0);
+					this->m_enter.Lock();
+				}
+				//解锁(宿主)
+				inline void UnLock() {
+					this->m_enter.UnLock();
+				}
+			};
+			
 		}
 	}
 }

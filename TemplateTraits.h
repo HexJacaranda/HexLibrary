@@ -311,6 +311,24 @@ namespace HL
 		//所有指针当作值类型
 		template<class T>struct IsValueType<T*> { enum { R = true }; };
 
+		//基元类型判断及其特化
+		template<class T>struct IsPrimitiveType { enum { R = false }; };
+		template<>struct IsPrimitiveType<int> { enum { R = true }; };
+		template<>struct IsPrimitiveType<unsigned> { enum { R = true }; };
+		template<>struct IsPrimitiveType<float> { enum { R = true }; };
+		template<>struct IsPrimitiveType<long> { enum { R = true }; };
+		template<>struct IsPrimitiveType<unsigned long> { enum { R = true }; };
+		template<>struct IsPrimitiveType<long long> { enum { R = true }; };
+		template<>struct IsPrimitiveType<unsigned long long> { enum { R = true }; };
+		template<>struct IsPrimitiveType<double> { enum { R = true }; };
+		template<>struct IsPrimitiveType<long double> { enum { R = true }; };
+		template<>struct IsPrimitiveType<char> { enum { R = true }; };
+		template<>struct IsPrimitiveType<unsigned char> { enum { R = true }; };
+		template<>struct IsPrimitiveType<wchar_t> { enum { R = true }; };
+		//所有指针当作基元类型
+		template<class T>struct IsPrimitiveType<T*> { enum { R = true }; };
+
+
 		template<class T1, class T2>struct IsSame { enum { R = false }; };
 		template<class T>struct IsSame<T, T> { enum { R = true }; };
 

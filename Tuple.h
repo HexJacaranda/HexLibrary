@@ -26,6 +26,7 @@ namespace HL
 				template<class TT, class T, class...Rest>
 				class TupleTypeFind<TT, T, Rest...> :public Template::If<Template::IsSame<T, TT>::R, TupleTypeFind<TT>, TupleTypeFind<TT, Rest...>>::T, public Template::EnableIf<Template::IsSame<TT, T>::R, Tuple<T, Rest...>>
 				{
+
 				};
 				template<class...Ts>
 				class TupleMaker;

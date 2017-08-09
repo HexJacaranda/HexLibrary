@@ -15,9 +15,22 @@ namespace HL
 		}
 		namespace Generic
 		{
+			template<class T>
+			class ICollection;
+			template<class TKey, class TValue>
+			class IDictionary;
+			template<class T>
+			class IReadOnlyCollection;
 			template<class TT>class Array;
+			template<class TKey, class TValue>
+			class Dictionary;
 			template<class T>
 			using UArray = UPointer::uptr<Array<T>>;
+
+			template<class T>
+			using UICollection = UPointer::uptr<ICollection<T>>;
+			template<class T>
+			using UIReadOnlyCollection = UPointer::uptr<IReadOnlyCollection<T>>;
 		}
 		namespace Functional
 		{
@@ -55,6 +68,17 @@ namespace HL
 		template<class CharT>class BasicString;
 		typedef BasicString<wchar_t> String;
 		typedef UPointer::uptr<String> UString;
+		namespace Json
+		{
+			class IJsonValue;
+			class JsonObject;
+			class JsonArray;
+			class JsonValue;
+			typedef UPointer::uptr<IJsonValue> UIJsonValue;
+			typedef UPointer::uptr<JsonObject> UJsonObject;
+			typedef UPointer::uptr<JsonArray> UJsonArray;
+			typedef UPointer::uptr<JsonValue> UJsonValue;
+		}
 	}
 	namespace Cast
 	{

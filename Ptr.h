@@ -5,91 +5,6 @@ namespace HL
 	{
 		namespace Reference
 		{
-			template<class T>
-			class COMPtr
-			{
-				T*m_ptr = nullptr;
-				void Release() {
-					if (m_ptr)
-					{
-						((IUnknown*)m_ptr)->Release();
-						m_ptr = nullptr;
-					}
-				}
-			public:
-				COMPtr(COMPtr const&ptr) {
-					if (ptr.m_ptr != nullptr)
-					{
-						m_ptr = ptr.m_ptr;
-						((IUnknown*)m_ptr)->AddRef();
-					}
-				}
-				inline COMPtr(COMPtr &&ptr) {
-					m_ptr = ptr.m_ptr;
-				}
-				COMPtr(T*ptr) {
-					if (ptr)
-						m_ptr = ptr;
-				}
-				COMPtr() {
-				}
-				COMPtr(nullptr_t) {}
-				COMPtr&operator=(COMPtr const&ptr) {
-					Release();
-					if (ptr.m_ptr != nullptr)
-					{
-						m_ptr = ptr.m_ptr;
-						((IUnknown*)m_ptr)->AddRef();
-					}
-					return *this;
-				}
-				COMPtr&operator=(COMPtr&&ptr) {
-					Release();
-					m_ptr = ptr.m_ptr;
-					return *this;
-				}
-				COMPtr&operator=(nullptr_t) {
-					Release();
-					return *this;
-				}
-				COMPtr&operator=(T*ptr) {
-					Release();
-					m_ptr = ptr;
-					return *this;
-				}
-				inline T*operator->() {
-					return m_ptr;
-				}
-				inline T const* operator->()const {
-					return m_ptr;
-				}
-				inline T&operator*() {
-					return *m_ptr;
-				}
-				inline T const& operator*()const
-				{
-					return *m_ptr;
-				}
-				inline operator T*() {
-					return m_ptr;
-				}
-				inline operator T const*()const {
-					return m_ptr;
-				}
-				inline T**operator&() {
-					return &this->m_ptr;
-				}
-				inline T* const* operator&()const {
-					return &this->m_ptr;
-				}
-				inline bool IsNull()const {
-					return m_ptr == nullptr;
-				}
-				inline ~COMPtr() {
-					Release();
-				}
-			};
-
 			namespace InternalAdopt
 			{
 				class reference_resource_base:public System::UPointer::uptr_resource
@@ -97,19 +12,27 @@ namespace HL
 				public:
 					Threading::AtomicCounter reference_counter;
 					virtual void release() = 0;
+					virtual System::UPointer::uptr_resource* clone()const = 0;
 				};
 
 				template<class T>
-				class reference_resource:public reference_resource_base
+				class reference_resource :public reference_resource_base
 				{
 				public:
-					T*object_ptr = nullptr;
-					virtual void release() {
+					virtual void release()final {
+						T*object_ptr = (T*)this->object;
 						if (object_ptr)
 						{
 							delete object_ptr;
 							object_ptr = nullptr;
 						}
+					}
+					virtual System::UPointer::uptr_resource* clone()const final{
+						T*object_ptr = (T*)this->object;
+						reference_resource<T> *ret = new reference_resource<T>();
+						ret->reference_counter = 1;
+						ret->object = Interface::ICloneable<T>::GetClonePtr(*object_ptr);
+						return ret;
 					}
 				};
 
@@ -119,7 +42,7 @@ namespace HL
 					reference_keeper() {
 						this->keeper_type_id = System::UPointer::resource_keeper_type_id<reference_keeper>();
 					}
-					virtual void release_resource(System::UPointer::uptr_resource*ptr) {
+					virtual void release_resource(System::UPointer::uptr_resource*ptr)final {
 						if (ptr) {
 							reference_resource_base*objptr = static_cast<reference_resource_base*>(ptr);
 							if (--objptr->reference_counter == 0)
@@ -130,7 +53,7 @@ namespace HL
 								}
 						}
 					}
-					virtual System::UPointer::uptr_resource*update(System::UPointer::uptr_resource* ptr,Reference::IntPtr) {
+					virtual System::UPointer::uptr_resource*update(System::UPointer::uptr_resource* ptr,Reference::IntPtr)final {
 						if (ptr)
 						{
 							reference_resource_base*objptr = static_cast<reference_resource_base*>(ptr);
@@ -138,7 +61,7 @@ namespace HL
 						}
 						return ptr;
 					}
-					virtual bool is_invalid(System::UPointer::uptr_resource*ptr)const {
+					virtual bool is_invalid(System::UPointer::uptr_resource*ptr)const final {
 						if (ptr)
 						{
 							reference_resource_base*objptr = static_cast<reference_resource_base*>(ptr);
@@ -150,8 +73,12 @@ namespace HL
 
 				class native_reference_resource :public System::UPointer::uptr_resource
 				{
-					virtual void release() {
+					virtual void release() final{
 
+					}
+					virtual System::UPointer::uptr_resource* clone()const final
+					{
+						Exception::Throw<Exception::InterfaceNoImplementException>();
 					}
 				};
 
@@ -161,12 +88,12 @@ namespace HL
 					native_reference_keeper() {
 						this->keeper_type_id = System::UPointer::resource_keeper_type_id<native_reference_keeper>();
 					}
-					virtual void release_resource(System::UPointer::uptr_resource*ptr) {
+					virtual void release_resource(System::UPointer::uptr_resource*ptr)final {
 					}
-					virtual System::UPointer::uptr_resource*update(System::UPointer::uptr_resource* ptr, Reference::IntPtr) {
+					virtual System::UPointer::uptr_resource*update(System::UPointer::uptr_resource* ptr, Reference::IntPtr)final {
 						return ptr;
 					}
-					virtual bool is_invalid(System::UPointer::uptr_resource*ptr)const {
+					virtual bool is_invalid(System::UPointer::uptr_resource*ptr)const final {
 						return true;
 					}
 				};
@@ -175,13 +102,19 @@ namespace HL
 				class unique_resource:public System::UPointer::uptr_resource
 				{
 				public:
-					T*object_ptr = nullptr;
-					virtual void release() {
+					virtual void release() final {
+						T*object_ptr = (T*)this->object;
 						if (object_ptr)
 						{
 							delete object_ptr;
 							object_ptr = nullptr;
 						}
+					}
+					virtual System::UPointer::uptr_resource* clone()const final {
+						T*object_ptr = (T*)this->object;
+						unique_resource<T>*ret = new unique_resource<T>();
+						ret->object = Interface::ICloneable<T>::GetClonePtr(*object_ptr);
+						return 
 					}
 				};
 				
@@ -191,14 +124,14 @@ namespace HL
 					unique_keeper() {
 						this->keeper_type_id = System::UPointer::resource_keeper_type_id<unique_keeper>();
 					}
-					virtual void release_resource(System::UPointer::uptr_resource*ptr) {
+					virtual void release_resource(System::UPointer::uptr_resource*ptr)final {
 						if (ptr)
 						{
 							ptr->release();
 							ptr->self_release = true;
 						}
 					}
-					virtual System::UPointer::uptr_resource*update(System::UPointer::uptr_resource* ptr, Reference::IntPtr ptr_to_ptr) {
+					virtual System::UPointer::uptr_resource*update(System::UPointer::uptr_resource* ptr, Reference::IntPtr ptr_to_ptr) final {
 						if (ptr)
 						{
 							System::UPointer::uptr_resource**prev_ptr = ptr_to_ptr;
@@ -206,7 +139,7 @@ namespace HL
 						}
 						return ptr;
 					}
-					virtual bool is_invalid(System::UPointer::uptr_resource*ptr)const {
+					virtual bool is_invalid(System::UPointer::uptr_resource*ptr)const final {
 						return true;//unique≤ª‘ –Ìweakptr
 					}
 				};
@@ -216,17 +149,19 @@ namespace HL
 			System::UPointer::uptr<U> newptr(Args &&...args) {
 				InternalAdopt::reference_keeper*ptr = System::UPointer::keeper_interface<InternalAdopt::reference_keeper>();
 				InternalAdopt::reference_resource<U>*resource_ptr = new InternalAdopt::reference_resource<U>;
-				resource_ptr->object_ptr= new U(args...);
+				U*object = new U(args...);
+				resource_ptr->object = object;
 				resource_ptr->reference_counter = 1;
-				return System::UPointer::uptr<U>(resource_ptr->object_ptr, resource_ptr, ptr);
+				return System::UPointer::uptr<U>(object, resource_ptr, ptr);
 			}
 
 			template<class U, class...Args>
 			System::UPointer::uptr<U> new_unique(Args &&...args) {
 				InternalAdopt::unique_keeper*ptr = System::UPointer::keeper_interface<InternalAdopt::unique_keeper>();
 				InternalAdopt::unique_resource<U>*resource_ptr = new InternalAdopt::unique_resource<U>;
-				resource_ptr->object_ptr = new U(args...);
-				return System::UPointer::uptr<U>(resource_ptr->object_ptr, resource_ptr, ptr);
+				U*object = new U(args...);
+				resource_ptr->object = object;
+				return System::UPointer::uptr<U>(object, resource_ptr, ptr);
 			}
 
 			template<class U>

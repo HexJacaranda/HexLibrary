@@ -44,13 +44,6 @@ namespace HL
 				p2 = t;
 			}
 
-			template<class TKey,class TValue>
-			class KeyValuePair {
-			public:
-				TKey Key;
-				TValue Value;
-			};
-
 			template<class T>
 			class MemoryManager
 			{
@@ -82,7 +75,7 @@ namespace HL
 				void Remove(index_t, index_t);
 				void CopyTo(T*, size_t);
 				void CopyTo(T*, index_t, size_t);
-				void Clean();
+				void Clear();
 				void ManageFrom(T*, size_t, size_t);
 				void ShrinkToFit();
 				void Expand(size_t);
@@ -301,7 +294,7 @@ namespace HL
 			}
 
 			template<class T>
-			inline void MemoryManager<T>::Clean()
+			inline void MemoryManager<T>::Clear()
 			{
 				if (m_data) {
 					if (!Template::IsValueType<T>::R)
@@ -317,7 +310,7 @@ namespace HL
 			template<class T>
 			inline void MemoryManager<T>::ManageFrom(T *source, size_t count, size_t total)
 			{
-				this->Clean();
+				this->Clear();
 				this->m_data = source;
 				this->m_used = count;
 				this->m_max = total;
@@ -329,7 +322,7 @@ namespace HL
 				if (m_used != m_max)
 				{
 					if (m_used == 0)
-						Clean();
+						Clear();
 					else
 						internal_resize(m_used);
 				}
@@ -429,7 +422,7 @@ namespace HL
 			template<class T>
 			inline MemoryManager<T>::~MemoryManager()
 			{
-				this->Clean();
+				this->Clear();
 			}
 		}
 	}

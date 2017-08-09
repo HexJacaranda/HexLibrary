@@ -42,6 +42,11 @@ namespace HL
 				std::wcout << Message << std::endl;
 				ConsoleMutex().UnLock();
 			}
+			static void WriteLine(const char*Message) {
+				ConsoleMutex().Lock();
+				std::cout << Message << std::endl;
+				ConsoleMutex().UnLock();
+			}
 			//数值类型
 			static void WriteLine(int number) {
 				ConsoleMutex().Lock();

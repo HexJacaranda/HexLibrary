@@ -5,18 +5,6 @@ namespace HL
 	{
 		namespace Convariance
 		{
-			//协变标记
-			template<class T>class out{};
-
-			template<class T>struct UnSign
-			{
-				typedef T T;
-			};
-			template<class T>struct UnSign<out<T>>
-			{
-				typedef T T;
-			};
-
 			//标记一个类型的协变(逆变)详细信息
 			template<class T>
 			struct IConvariance
@@ -54,46 +42,8 @@ namespace HL
 				typedef T T;
 			};
 
-
-
 			template<class From, class To>
 			struct Covariant
-			{
-				enum { R = false };
-			};
-
-			template<class From, class To>
-			struct Covariant<out<From>, To>
-			{
-				static constexpr bool Judge()
-				{
-					constexpr bool First = IsCovariant<From>::R&&IsCovariant<To>::R;
-					static_assert(First, "illegal covariant type!");
-					typedef typename IConvariance<From>::ConvarianceType FromT;
-					typedef typename IConvariance<To>::ConvarianceType ToT;
-					constexpr bool Second = Template::IsBaseOf<FromT, ToT>::R;
-					static_assert(Second, "illegal convariance!");
-				}
-				static constexpr bool R = Judge();
-			};
-
-			template<class From, class To>
-			struct Covariant<out<From>, out<To>>
-			{
-				static constexpr bool Judge()
-				{
-					constexpr bool First = IsCovariant<From>::R&&IsCovariant<To>::R;
-					static_assert(First, "illegal covariant type!");
-					typedef typename IConvariance<From>::ConvarianceType FromT;
-					typedef typename IConvariance<To>::ConvarianceType ToT;
-					constexpr bool Second = Template::IsBaseOf<FromT, ToT>::R;
-					static_assert(Second, "illegal convariance!");
-				}
-				static constexpr bool R = Judge();
-			};
-
-			template<class From, class To>
-			struct Covariant<From, out<To>>
 			{
 				static constexpr bool Judge()
 				{
@@ -103,6 +53,23 @@ namespace HL
 					typedef typename IConvariance<To>::ConvarianceType ToT;
 
 					constexpr bool Second = Template::IsBaseOf<FromT,ToT>::R;
+					static_assert(Second, "no inherited!");
+					return true;
+				}
+				static constexpr bool R = Judge();
+			};
+
+			template<class From,class To>
+			struct Contravariant 
+			{
+				static constexpr bool Judge()
+				{
+					constexpr bool First = IsCovariant<From>::R&&IsCovariant<To>::R;
+					static_assert(First, "illegal covariant type!");
+					typedef typename IConvariance<From>::ConvarianceType FromT;
+					typedef typename IConvariance<To>::ConvarianceType ToT;
+
+					constexpr bool Second = Template::IsBaseOf<ToT, FromT>::R;
 					static_assert(Second, "no inherited!");
 					return true;
 				}

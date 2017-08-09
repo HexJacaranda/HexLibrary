@@ -35,10 +35,8 @@ namespace HL
 					static U Convert(uobject const&);
 				};
 
-
-
 			}
-
+			
 			//resource_keeper标识符
 			template<class T>
 			static atomic_type resource_keeper_type_id() {
@@ -59,8 +57,13 @@ namespace HL
 				//释放资源接口
 				//[注意]uptr不会使用该接口,仅仅只会将该指针传入keeper->release_resource内部处理
 				virtual void release() = 0;
-				
+
+				//返回对象clone
+				virtual uptr_resource* clone()const = 0;
+
 				bool self_release = false; //通知uptr该资源指针是否需要被释放
+
+				void* object = nullptr;
 
 				Threading::AtomicCounter weak_reference_count;//弱引用计数
 			};
@@ -87,7 +90,7 @@ namespace HL
 
 			//智能指针统一化类型
 			template<class T>
-			class uptr sealed
+			class uptr sealed:public System::Hash::ISupportHash
 			{
 				template<class U>friend class uptr;
 				template<class U>friend class weakuptr;
@@ -121,7 +124,10 @@ namespace HL
 				atomic_type GetLimitativeType()const;
 				//获得当前智能指针托管资源的类型
 				atomic_type GetResourceType()const;
-				size_t GetHashCode()const;
+				//获得对象Hash码(如果支持,不支持则为地址Hash)
+				virtual size_t GetHashCode()const;
+				//获得对象Clone
+				uptr<T> Clone()const;
 				template<class U, class Converter>
 				uptr<U> Cast(Converter);
 				~uptr();
@@ -158,10 +164,13 @@ namespace HL
 				operator uobject()const;
 				template<class AnyT>
 				operator uptr<AnyT>()const;
+
+				operator T const&()const;
+				operator T&();
 			};
 
 			//智能指针封箱统一化类型
-			class uobject sealed
+			class uobject sealed:System::Hash::ISupportHash
 			{
 				template<class U>friend class uptr;
 				template<class U>friend class weakuptr;
@@ -198,7 +207,10 @@ namespace HL
 				atomic_type GetLimitativeType()const;
 				//获得当前智能指针托管资源的类型
 				atomic_type GetResourceType()const;
-				size_t GetHashCode() const;
+				//获得对象Hash码(总是以地址算)
+				virtual size_t GetHashCode() const;
+				//获得对象副本
+				uobject Clone()const;
 				template<class T>
 				T * To();
 				template<class T>
@@ -416,8 +428,17 @@ namespace HL
 			template<class T>
 			inline size_t uptr<T>::GetHashCode() const
 			{
+				if (Template::IsBaseOf<System::Hash::ISupportHash, T>::R)
+					return ((System::Hash::ISupportHash*)this->m_ptr)->GetHashCode();
 				atomic_type ptr = (atomic_type)this->m_ptr;
-				return Memory::Hash::HashSeq(&ptr);
+				return Hash::Hash::HashSeq(&ptr);
+			}
+
+			template<class T>
+			inline uptr<T> uptr<T>::Clone() const
+			{
+				uptr_resource*clone = this->resource->clone();
+				return uptr<T>((T*)clone->object, clone, this->resource_keeper);
 			}
 
 			template<class T>
@@ -437,6 +458,18 @@ namespace HL
 					ret.resource = this->resource_keeper->update(this->resource, &this->resource);
 				}
 				return ret;
+			}
+
+			template<class T>
+			inline uptr<T>::operator T const&() const
+			{
+				return *(this->m_ptr);
+			}
+
+			template<class T>
+			inline uptr<T>::operator T&()
+			{
+				return *(this->m_ptr);
 			}
 
 			//封箱类型
@@ -554,7 +587,21 @@ namespace HL
 			inline size_t uobject::GetHashCode() const
 			{
 				atomic_type ptr = (atomic_type)this->m_ptr;
-				return Memory::Hash::HashSeq(&ptr);
+				return Hash::Hash::HashSeq(&ptr);
+			}
+
+			inline uobject uobject::Clone() const
+			{
+				uptr_resource*clone = nullptr;
+				if (this->resource)
+					clone = this->resource->clone();
+				else
+					return nullptr;
+				uobject ret;
+				ret.resource = clone;
+				ret.resource_keeper = this->resource_keeper;
+				ret.m_ptr = clone->object;
+				return ret;
 			}
 
 			inline uobject::~uobject()
@@ -754,7 +801,7 @@ namespace HL
 			inline size_t weakuptr<T>::GetHashCode() const
 			{
 				atomic_type ptr = (atomic_type)this->m_ptr;
-				return Memory::Hash::HashSeq(&ptr);
+				return Hash::Hash::HashSeq(&ptr);
 			}
 			template<class T>
 			inline uptr<T> weakuptr<T>::ToUPtr() const

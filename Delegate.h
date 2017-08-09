@@ -302,7 +302,6 @@ namespace HL
 				//÷∏’Î
 				Internal::DelegateBase*method_ptr = nullptr;
 			public:
-
 				Delegate(){}
 				Delegate(Delegate const&rhs) {
 					if (rhs.method_ptr)
@@ -315,7 +314,8 @@ namespace HL
 				template<class OR, class...Others>
 				Delegate(Delegate<OR,Others...> const&rhs) {
 					bool Result = System::Convariance::ListCovariant<typename Delegate<OR, Others...>::MySignature, MySignature>::R;
-					if (Result)
+					bool Result2 = System::Convariance::Contravariant<OR, R>::R;
+					if (Result&&Result2)
 					{
 						if (rhs.method_ptr)
 							this->method_ptr = rhs.method_ptr->Clone();
@@ -324,7 +324,8 @@ namespace HL
 				template<class OR, class...Others>
 				Delegate(Delegate<OR, Others...> &&lhs) {
 					bool Result = System::Convariance::ListCovariant<typename Delegate<OR, Others...>::MySignature, MySignature>::R;
-					if (Result)
+					bool Result2 = System::Convariance::Contravariant<OR, R>::R;
+					if (Result&&Result2)
 					{
 						this->method_ptr = lhs.method_ptr;
 						lhs.method_ptr = nullptr;
@@ -337,7 +338,8 @@ namespace HL
 				Delegate&operator=(Delegate<OR, Others...> const&rhs)
 				{
 					bool Result = System::Convariance::ListCovariant<typename Delegate<OR, Others...>::MySignature, MySignature>::R;
-					if (Result)
+					bool Result2 = System::Convariance::Contravariant<OR, R>::R;
+					if (Result&&Result2)
 					{
 						this->~Delegate();
 						if (rhs.method_ptr)
@@ -349,7 +351,8 @@ namespace HL
 				Delegate&operator=(Delegate<OR, Others...> &&lhs)
 				{
 					bool Result = System::Convariance::ListCovariant<typename Delegate<OR, Others...>::MySignature, MySignature>::R;
-					if (Result)
+					bool Result2 = System::Convariance::Contravariant<OR, R>::R;
+					if (Result&&Result2)
 					{
 						this->~Delegate();
 						this->method_ptr = lhs.method_ptr;
@@ -366,7 +369,7 @@ namespace HL
 				UPointer::uobject InvokeWith(UPointer::uptr<Reference::IntPtr> const& objptr, UPointer::uptr<Generic::Array<UPointer::uobject>>const&params)const {
 					return method_ptr->Invoke(params, objptr, Internal::InvokeType::InvokeWithNativePtr);
 				}
-				Ret operator()(typename System::Convariance::UnSign<Args>::T const&...args)const {
+				Ret operator()(Args const&...args)const {
 					return Invoke(params(args...));
 				}
 				~Delegate() {
@@ -387,6 +390,14 @@ namespace HL
 				Internal::DelegateBase*method_ptr = nullptr;
 			public:
 				Delegate() {}
+				Delegate(Delegate const&rhs) {
+					if (rhs.method_ptr)
+						this->method_ptr = rhs.method_ptr->Clone();
+				}
+				Delegate(Delegate &&lhs) {
+					this->method_ptr = lhs.method_ptr;
+					lhs.method_ptr = nullptr;
+				}
 				template<class OR, class...Others>
 				Delegate(Delegate<OR, Others...> const&rhs) {
 					if (rhs.method_ptr)
@@ -407,6 +418,20 @@ namespace HL
 				}
 				template<class OR, class...Others>
 				Delegate&operator=(Delegate<OR, Others...> &&lhs)
+				{
+					this->~Delegate();
+					this->method_ptr = lhs.method_ptr;
+					lhs.method_ptr = nullptr;
+					return *this;
+				}
+				Delegate&operator=(Delegate const&rhs)
+				{
+					this->~Delegate();
+					if (rhs.method_ptr)
+						this->method_ptr = rhs.method_ptr->Clone();
+					return *this;
+				}
+				Delegate&operator=(Delegate &&lhs)
 				{
 					this->~Delegate();
 					this->method_ptr = lhs.method_ptr;

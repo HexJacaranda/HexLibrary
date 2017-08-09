@@ -28,6 +28,9 @@ namespace HL
 		EXCEPTIONCLASS(SetOnlyException, "该属性为只写");
 		EXCEPTIONCLASS(GetOnlyException, "该属性为只读");
 		EXCEPTIONCLASS(ArgumentNullException, "参数为null");
+		EXCEPTIONCLASS(UnHandledException, "未处理异常");
+		EXCEPTIONCLASS(KeyNotFoundException, "找不到键");
+		EXCEPTIONCLASS(InterfaceNoImplementException, "接口未实现异常");
 
 		class IndexOutOfException;
 

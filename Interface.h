@@ -38,6 +38,88 @@ namespace HL
 				typedef Void* IteratorType;
 				typedef Void* ConstIteratorType;
 			};
+			//为类型提供[智能指针<>]的逆/协变转化
+			//接口类型定义规范:
+			//enum:
+			//Enable:指示是否为逆/协变类型
+			template<class From,class To>
+			struct CovariantSupportInterface
+			{
+				enum { Enable = false };
+			};
+
+			//可克隆接口
+			template<class T>
+			class ICloneable
+			{
+				template<bool Based,bool PriType,class AnyT>
+				struct Aid
+				{
+					static AnyT GetClone(AnyT const&target) {
+						return ((ICloneable<AnyT>*)&(target))->Clone();
+					}
+				};
+
+				template<bool Based,class AnyT>
+				struct Aid<Based, true, AnyT>
+				{
+					static AnyT GetClone(AnyT const&target) {
+						return AnyT(target);
+					}
+				};
+
+				template<bool PriType, class AnyT>
+				struct Aid<false, PriType, AnyT>
+				{
+					static AnyT GetClone(AnyT const&target) {
+						Exception::Throw<Exception::InterfaceNoImplementException>();
+						return *((AnyT*)nullptr);
+					}
+				};
+
+				template<bool Based, bool PriType, class AnyT>
+				struct AidPtr
+				{
+					static AnyT* GetClone(AnyT const&target) {
+						return new AnyT(((ICloneable<AnyT>*)&(target))->Clone());
+					}
+				};
+
+				template<bool Based, class AnyT>
+				struct AidPtr<Based, true, AnyT>
+				{
+					static AnyT* GetClone(AnyT const&target) {
+						return new AnyT(target);
+					}
+				};
+
+				template<bool PriType, class AnyT>
+				struct AidPtr<false, PriType, AnyT>
+				{
+					static AnyT* GetClone(AnyT const&target) {
+						HL::Exception::Throw<HL::Exception::InterfaceNoImplementException>();
+						return nullptr;
+					}
+				};
+
+				template<class AnyT>
+				struct AidPtr<false, true, AnyT>
+				{
+					static AnyT* GetClone(AnyT const&target) {
+						return new AnyT(target);
+					}
+				};
+			public:
+				virtual T Clone()const = 0;
+				//获得复制实例
+				static T GetClone(T const&target) {
+					return Aid<Template::IsBaseOf<ICloneable<T>, T>::R, Template::IsPrimitiveType<T>::R, T>::GetClone(target);
+				}
+				//获得复制实例(由new分配在堆上的对象)
+				static T* GetClonePtr(T const&target) {
+					return AidPtr<Template::IsBaseOf<ICloneable<T>, T>::R, Template::IsPrimitiveType<T>::R, T>::GetClone(target);
+				}
+			};
 		}
 	}
 }

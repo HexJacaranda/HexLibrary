@@ -432,7 +432,7 @@ namespace HL
 		}
 
 		template<class CharT>
-		class BasicString
+		class BasicString:public System::Hash::ISupportHash,public System::Interface::ICloneable<BasicString<CharT>>
 		{
 			typedef Memory::MemoryManager<CharT> ContainerT;
 			ContainerT data;
@@ -457,13 +457,13 @@ namespace HL
 					return;
 				if (EndInx < StartInx)
 					return;
-				if (StartInx < 0 && EndInx >= this->GetLength())
+				if (StartInx < 0 && EndInx >= this->Count())
 					return;
 				size_t old_length = Internal::BasicStringLength(Old);
 				size_t new_length = Internal::BasicStringLength(New);
 				index_t differ = new_length - old_length;
 				Memory::MemoryManager<index_t> outer;
-				Internal::BasicStringIndexOfAll(Old, this->data.GetMemoryBlock(), outer, old_length, this->GetLength(), StartInx, EndInx);
+				Internal::BasicStringIndexOfAll(Old, this->data.GetMemoryBlock(), outer, old_length, this->Count(), StartInx, EndInx);
 				if (outer.GetUsedSize() > 0)//搜索到了字符
 				{
 					if (differ > 0)//新字符串比原字符串长
@@ -504,11 +504,11 @@ namespace HL
 				EndWrite();
 			}
 			BasicString(System::Generic::Array<CharT> const&rhs) {
-				this->data.Append(rhs.GetData(), rhs.GetLength());
+				this->data.Append(rhs.GetData(), rhs.Count());
 				EndWrite();
 			}
 			BasicString(BasicString&& lhs) :data(static_cast<ContainerT&&>(lhs.data)) {}
-			BasicString(const CharT*string) {
+		    BasicString(const CharT*string) {
 				if (string)
 				{
 					this->BeginWrite();
@@ -603,17 +603,23 @@ namespace HL
 			//追加字符串
 			void Append(System::Generic::Array<CharT> const&rhs) {
 				this->BeginWrite();
-				this->data.Append(rhs.GetData(), rhs.GetLength());
+				this->data.Append(rhs.GetData(), rhs.Count());
 				this->EndWrite();
 			}
 			//追加字符串
 			void Append(System::Generic::Array<CharT> const&rhs, index_t index, size_t count) {
-				if (index >= 0 && index + count < rhs.GetLength())
+				if (index >= 0 && index + count < rhs.Count())
 				{
 					this->BeginWrite();
 					this->data.Append(rhs.GetData() + index, count);
 					this->EndWrite();
 				}
+			}
+			//追加字符
+			void Append(CharT target) {
+				this->BeginWrite();
+				this->data.Append(target);
+				this->EndWrite();
 			}
 			//查找区间:[start_index,end_index]
 			index_t IndexOf(const CharT* string, index_t start_index, index_t end_index)const {
@@ -621,23 +627,23 @@ namespace HL
 			}
 			//查找区间:[start_index,end]
 			index_t IndexOf(const CharT* string, index_t start_index)const {
-				return Internal::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->GetLength() - 1);
+				return Internal::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t IndexOf(const CharT* string)const {
-				return Internal::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->GetLength() - 1);
+				return Internal::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//查找区间:[start_index,end_index]
 			index_t IndexOf(BasicString const& string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Internal::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t IndexOf(BasicString const& string, index_t start_index)const {
-				return Internal::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, start_index, this->GetLength() - 1);
+				return Internal::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t IndexOf(BasicString const& string)const {
-				return Internal::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, 0, this->GetLength() - 1);
+				return Internal::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//查找区间:[start_index,end_index]
 			index_t LastIndexOf(const CharT* string, index_t start_index, index_t end_index)const {
@@ -645,23 +651,23 @@ namespace HL
 			}
 			//查找区间:[start_index,end]
 			index_t LastIndexOf(const CharT* string, index_t start_index)const {
-				return Internal::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->GetLength() - 1);
+				return Internal::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t LastIndexOf(const CharT* string)const {
-				return Internal::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->GetLength() - 1);
+				return Internal::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//查找区间:[start_index,end_index]
 			index_t LastIndexOf(BasicString const& string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Internal::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t LastIndexOf(BasicString const& string, index_t start_index)const {
-				return Internal::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, start_index, this->GetLength() - 1);
+				return Internal::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t LastIndexOf(BasicString const& string)const {
-				return Internal::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, 0, this->GetLength() - 1);
+				return Internal::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//替换字符串
 			void Replace(const CharT* oldstring, const CharT* newstring) {
@@ -673,7 +679,7 @@ namespace HL
 			}
 			//替换字符串
 			void Replace(const CharT* oldstring, const CharT* newstring, index_t start_index) {
-				this->ReplaceInternal(oldstring, newstring, start_index, this->GetLength() - 1);
+				this->ReplaceInternal(oldstring, newstring, start_index, this->Count() - 1);
 			}
 			//替换字符串
 			void Replace(BasicString const& oldstring, BasicString const& newstring) {
@@ -685,35 +691,35 @@ namespace HL
 			}
 			//替换字符串
 			void Replace(BasicString const& oldstring, BasicString const& newstring, index_t start_index) {
-				this->ReplaceInternal(oldstring.GetData(), newstring.GetData(), start_index, this->GetLength() - 1);
+				this->ReplaceInternal(oldstring.GetData(), newstring.GetData(), start_index, this->Count() - 1);
 			}
 			//查找区间:[start_index,end_index]
 			index_t IndexOfAny(const CharT* string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t IndexOfAny(const CharT* string, index_t start_index)const {
-				return Internal::BasicStringIndexOfAny(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->GetLength() - 1);
+				return Internal::BasicStringIndexOfAny(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t IndexOfAny(const CharT* string)const {
-				return Internal::BasicStringIndexOfAny(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->GetLength() - 1);
+				return Internal::BasicStringIndexOfAny(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//查找区间:[start_index,end_index]
 			index_t IndexOfAny(BasicString const& string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t IndexOfAny(BasicString const& string, index_t start_index)const {
-				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, start_index, this->GetLength() - 1);
+				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t IndexOfAny(BasicString const& string)const {
-				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.GetLength(), this->data.GetUsedSize() - 1, 0, this->GetLength() - 1);
+				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//截取[start_index,end_index]内的字符串
 			BasicString SubString(index_t start_index, index_t end_index)const {
-				if (end_index >= start_index&&start_index >= 0 && end_index < this->GetLength())
+				if (end_index >= start_index&&start_index >= 0 && end_index < this->Count())
 				{
 					BasicString ret(end_index - start_index + 1);
 					ret.Append(this->data, start_index, end_index - start_index + 1);
@@ -727,7 +733,7 @@ namespace HL
 			}
 			//将字符串从index起拷贝count个至
 			void CopyTo(CharT* dest, index_t start_index, size_t count)const {
-				if (start_index >= 0 && start_index + count < this->GetLength())
+				if (start_index >= 0 && start_index + count < this->Count())
 					Memory::Allocator::MemoryCopy(this->data.GetMemoryBlock() + start_index, dest, 0, count * sizeof(CharT));
 			}
 			//以分隔符分割字符串
@@ -741,7 +747,7 @@ namespace HL
 				index_t last_index = -(index_t)length;
 				index_t result = 0;
 				for (;;) {
-					if (result + length > this->GetLength() - 1)
+					if (result + length > this->Count() - 1)
 						break;
 					result = this->IndexOf(separator, last_index + length);
 					if (result == -1)
@@ -749,12 +755,12 @@ namespace HL
 					else
 					{
 						String temp = this->SubString(last_index + length, result - 1);
-						if (temp.GetLength() > 0)
+						if (temp.Count() > 0)
 							ret.Add(temp);
 					}
 					last_index = result;
 				}
-				ret.Add(this->SubString(last_index + length, this->GetLength() - 1));
+				ret.Add(this->SubString(last_index + length, this->Count() - 1));
 				return ret;
 			}
 			//转换为大写
@@ -782,13 +788,13 @@ namespace HL
 				EndWrite();
 			}
 			//获得字符串长度
-			size_t GetLength()const {
+			size_t Count()const {
 				size_t length = this->data.GetUsedSize();
 				return length > 0 ? length - 1 : 0;
 			}
 			//字符串是否为空
 			bool IsEmpty()const {
-				return this->GetLength() == 0;
+				return this->Count() == 0;
 			}
 			//获得原始指针
 			const CharT* GetData()const {
@@ -809,7 +815,7 @@ namespace HL
 			}
 		public:
 			friend std::wostream& operator << (std::wostream&Stream, const BasicString&Obj) {
-				if (Obj.GetLength() == 0)
+				if (Obj.Count() == 0)
 					Stream << L"NullString";
 				else
 					Stream << Obj.data.GetMemoryBlock();
@@ -833,8 +839,12 @@ namespace HL
 				FormatInternal(format, &ret, args...);
 				return ret;
 			}
-			size_t GetHashCode()const {
-				return Memory::Hash::HashSeq(this->GetData(), this->GetLength());
+			virtual size_t GetHashCode()const final {
+				return Hash::Hash::HashSeq(this->GetData(), this->Count());
+			}
+
+			virtual BasicString<CharT> Clone()const {
+				return BasicString<CharT>(*this);
 			}
 		};
 
@@ -949,22 +959,22 @@ namespace HL
 				{
 					BasicString&current_str = to_string[outer[i].GetAt<1>()];//取对应对象转换成string的引用
 					size_t num_length = (outer[i].GetAt<2>() - outer[i].GetAt<0>() + 1);//计算占位符占了多长 例如{0}是3
-					index_t differ = current_str.GetLength() - num_length;//计算插入字符串与占位符长度的差值
+					index_t differ = current_str.Count() - num_length;//计算插入字符串与占位符长度的差值
 					//处理与Replace如出一辙
 					if (differ > 0)//新字符串比原字符串长
 					{
 						out->Expand(differ * 2);
 						out->MoveBackward(outer[i].GetAt<0>() + offset, differ);//向后移动差值单位
-						Memory::Allocator::MemoryCopy(current_str.GetData(), out->GetMemoryBlock() + outer[i].GetAt<0>() + offset, 0, sizeof(CharT)*current_str.GetLength());//将新字符串填入
+						Memory::Allocator::MemoryCopy(current_str.GetData(), out->GetMemoryBlock() + outer[i].GetAt<0>() + offset, 0, sizeof(CharT)*current_str.Count());//将新字符串填入
 					}
 					else if (differ < 0)
 					{
-						Memory::Allocator::MemoryCopy(current_str.GetData(), out->GetMemoryBlock() + outer[i].GetAt<0>() + offset, 0, sizeof(CharT)*current_str.GetLength());//将新字符串填入
-						Memory::Allocator::MemoryCopy(out->GetMemoryBlock() + outer[i].GetAt<0>() + offset + num_length, out->GetMemoryBlock() + outer[i].GetAt<0>() + offset + current_str.GetLength(), 0, sizeof(CharT)*(out->GetUsedSize() - (outer[i].GetAt<0>() + offset)));//向前移动
+						Memory::Allocator::MemoryCopy(current_str.GetData(), out->GetMemoryBlock() + outer[i].GetAt<0>() + offset, 0, sizeof(CharT)*current_str.Count());//将新字符串填入
+						Memory::Allocator::MemoryCopy(out->GetMemoryBlock() + outer[i].GetAt<0>() + offset + num_length, out->GetMemoryBlock() + outer[i].GetAt<0>() + offset + current_str.Count(), 0, sizeof(CharT)*(out->GetUsedSize() - (outer[i].GetAt<0>() + offset)));//向前移动
 					}
 					else//differ==0
 					{
-						Memory::Allocator::MemoryCopy(current_str.GetData(), out->GetMemoryBlock() + outer[i].GetAt<0>() + offset, 0, sizeof(CharT)*current_str.GetLength());//将新字符串填入
+						Memory::Allocator::MemoryCopy(current_str.GetData(), out->GetMemoryBlock() + outer[i].GetAt<0>() + offset, 0, sizeof(CharT)*current_str.Count());//将新字符串填入
 					}
 					offset += differ;//最后改动后应将offset加上改动值
 				}
@@ -1305,7 +1315,7 @@ namespace HL
 	{
 		namespace Functional
 		{
-			class InvokeFailedException:public Exception::IException
+			class InvokeFailedException :public HL::Exception::IException
 			{
 				String exception_msg;
 			public:

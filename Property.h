@@ -24,7 +24,7 @@ namespace HL
 			{
 				System::UPointer::uptr<interface_property<T>> interface_ptr;
 			public:
-				property(System::UPointer::uptr<interface_property<T>> const&ptr):interface_ptr(ptr){}
+				property(System::UPointer::uptr<interface_property<T>> const&ptr) : interface_ptr(ptr) {}
 				property(System::UPointer::uptr<interface_property<T>> &&ptr) : interface_ptr(ptr) {}
 				property(property const&) = delete;
 				property(property &&lhs) {
@@ -137,13 +137,6 @@ namespace HL
 				virtual void operator=(PropertyType const& Obj)const {
 					(Setter)(Obj);
 				}
-			};
-
-			//“¿¿µ Ù–‘
-			template<class T>
-			class DependencyProperty
-			{
-
 			};
 
 #define GET

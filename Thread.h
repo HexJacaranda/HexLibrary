@@ -10,7 +10,7 @@ namespace HL
 			{
 				struct thread_pack
 				{
-					Functional::UDelegate<Functional::Auto> target_function;//目标函数
+					Functional::Delegate<Functional::Auto> target_function;//目标函数
 					Generic::UArray<UPointer::uobject> parameters;//参数
 					UThread self_reference;//自引用
 					UPointer::uobject object_ptr;//对象指针
@@ -27,13 +27,13 @@ namespace HL
 				static void TargetFun(void*args) {
 					Internal::thread_pack*lptr = (Internal::thread_pack*)args;
 					if (lptr->object_ptr.IsNull())
-						lptr->async_ret = lptr->target_function->Invoke(lptr->parameters);
+						lptr->async_ret = lptr->target_function.Invoke(lptr->parameters);
 					else
-						lptr->async_ret = lptr->target_function->UInvoke(lptr->object_ptr, lptr->parameters);
+						lptr->async_ret = lptr->target_function.UInvoke(lptr->object_ptr, lptr->parameters);
 					lptr->self_reference = nullptr;
 				}
 			public:
-				Thread(Functional::UDelegate<Functional::Auto> const& Target,UPointer::uobject const& Object,Generic::UArray<UPointer::uobject> const& Args) {
+				Thread(Functional::Delegate<Functional::Auto> const& Target,UPointer::uobject const& Object,Generic::UArray<UPointer::uobject> const& Args) {
 					pack = new Internal::thread_pack;
 					pack->target_function = Target;
 					pack->parameters = Args;
@@ -85,6 +85,8 @@ namespace HL
 				AsyncResult&operator=(AsyncResult const&rhs) = default;
 				~AsyncResult() = default;
 			};
+
+			//异步返回值
 			template<>
 			class AsyncResult<void>
 			{
@@ -97,6 +99,7 @@ namespace HL
 				~AsyncResult() = default;
 			};
 
+			//多线程
 			class Task
 			{
 			public:
@@ -114,14 +117,14 @@ namespace HL
 				}
 				//异步执行
 				template<class T,class...Args>
-				static AsyncResult<T> Run(UPointer::uptr<Functional::UDelegate<Functional::Auto>> const&target, Args const&...args) {
+				static AsyncResult<T> Run(Functional::Delegate<Functional::Auto> const&target, Args const&...args) {
 					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(target, nullptr, params(args...));
 					Thr->Start();
 					return Thr;
 				}
 				//异步执行
 				template<class T, class...Args>
-				static AsyncResult<T> Run(UPointer::uptr<Functional::UDelegate<Functional::Auto>> const&target, UPointer::uobject const& object, Args const&...args) {
+				static AsyncResult<T> Run(Functional::Delegate<Functional::Auto> const&target, UPointer::uobject const& object, Args const&...args) {
 					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(target, object, params(args...));
 					Thr->Start();
 					return Thr;
@@ -130,20 +133,22 @@ namespace HL
 				template<class...Args,class Functor>
 				static AsyncResult<typename Functional::Inner::GetFunctionInfo<Functor>::R> Run(Functor fx, Args const&...args)
 				{
-					UPointer::uptr<Functional::Delegate<Functional::Auto>>Func = Reference::newptr<Functional::Delegate<Functional::Auto>>(Bind(fx));
+					Functional::Delegate<Functional::Auto>Func = Bind(fx);
 					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(Func, nullptr, Functional::params(args...));
 					Thr->Start();
 					return Thr;
 				}
+				//异步执行
 				template<class...Args, class TT, class Functor>
 				static AsyncResult<typename Functional::Inner::GetFunctionInfo<Functor>::R> Run(Functor fx, TT*obj, Args const&...args)
 				{
-					UPointer::uptr<Functional::Delegate<Functional::Auto>>Func = Reference::newptr<Functional::Delegate<Functional::Auto>>(Bind(fx, obj));
+					Functional::Delegate<Functional::Auto>Func = Bind(fx, obj);
 					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(Func, nullptr, Functional::params(args...));
 					Thr->Start();
 					return Thr;
 				}
 			};
+
 		}
 	}
 }
