@@ -652,12 +652,12 @@ namespace HL
 				friend class Library;
 			public:
 				//获取
-				Generic::UIReadOnlyCollection<UPointer::uptr<Field>> GetFields()const
+				Generic::UArray<UPointer::uptr<Field>>const& GetFields()const
 				{
 					return this->m_fields;
 				}
-				Generic::UIReadOnlyCollection<UPointer::uptr<Method>> GetMethods()const {
-
+				Generic::UArray<UPointer::uptr<Method>>const& GetMethods()const {
+					return this->m_methods;
 				}
 				//获取类型大小
 				inline size_t SizeOf()const {
@@ -669,7 +669,7 @@ namespace HL
 				}
 				//全名
 				inline System::String const& FullName()const {
-					return *m_name;
+					return m_name;
 				}
 			};
 
@@ -692,7 +692,7 @@ namespace HL
 					Type add;
 					add.m_size = sizeof(T);
 					add.m_name = GC::newgc<System::String>(name);
-					m_types.Add(*add.m_name, GC::newgc<Type>(add));
+					m_types.Add(add.m_name, GC::newgc<Type>(add));
 				}
 			public:
 				Library()

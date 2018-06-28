@@ -23,25 +23,6 @@ namespace HL
 				};
 			};
 
-			//类型列表
-			template<class...Args>
-			struct TypeList
-			{
-				static constexpr int Count = sizeof...(Args);
-			};
-			template<int index, class Sign>
-			struct TypeListGetAt;
-			template<int index, class T, class...Args>
-			struct TypeListGetAt<index, TypeList<T, Args...>>
-			{
-				typedef typename TypeListGetAt<index - 1, TypeList<Args...>>::T T;
-			};
-			template<class T, class...Args>
-			struct TypeListGetAt<0, TypeList<T, Args...>>
-			{
-				typedef T T;
-			};
-
 			template<class From, class To>
 			struct Covariant
 			{
@@ -83,7 +64,7 @@ namespace HL
 				struct ForEach
 				{
 					enum {
-						Judge = Covariant<typename TypeListGetAt<Count - 1, FromList>::T, typename TypeListGetAt<Count - 1, ToList>::T>::R,
+						Judge = Covariant<typename Template::TypeListGetAt<Count - 1, FromList>::T, typename Template::TypeListGetAt<Count - 1, ToList>::T>::R,
 						R = (Judge == false) ? false : ForEach<Count - 1>::R
 					};
 				};

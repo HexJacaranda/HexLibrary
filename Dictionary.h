@@ -98,115 +98,45 @@ namespace HL
 					}
 				};
 			}
-
 			template<class TKey, class TValue>
-			class KeyValuePair 
+			class DictionaryEnumerator :public Iteration::IEnumerator<KeyValuePair<TKey,TValue>>
 			{
+				typedef Inner::EntryPair<TKey, TValue> Entry;
+				typedef Iteration::IEnumerator<KeyValuePair<TKey, TValue>> Base;
+				typedef KeyValuePair<TKey, TValue> T;
+				T m_current;
+				Entry * m_iter;
+				Entry * m_end;
 			public:
-				TKey Key;
-				TValue Value;
-				KeyValuePair(TKey&&Key, TValue &&Value) :Key(static_cast<TKey&&>(Key)), Value(static_cast<Value&&>(Value)) {}
-				KeyValuePair(TKey const&Key, TValue const&Value) :Key(Key), Value(Value) {}
-			};
-
-			template<class TKey, class TValue>
-			class Iterator<Dictionary<TKey, TValue>, KeyValuePair<TKey, TValue>>
-			{
-				atomic_type m_index = 0;
-				typedef Generic::array<Inner::EntryPair<TKey, TValue>> ArrayT;
-				typedef KeyValuePair<TKey const&, TValue&> T;
-				ArrayT*ptr = nullptr;
-				KeyValuePair<TKey const&, TValue&> m_current;
-			public:
-				inline explicit Iterator(ArrayT const&entries) :ptr(const_cast<ArrayT*>(&entries)), m_current(*entries[0].Key, *entries[0].Value) {}
-				inline explicit Iterator(ArrayT const&entries, index_t index) :ptr(const_cast<ArrayT*>(&entries)), m_current(*entries[index].Key, *entries[index].Value), m_index(index){}
-				inline Iterator&operator++() {
-					m_index++;
-					while (m_index < ptr->Count()) {
-						if (ptr->GetAt(m_index).Hash > 0) {
-							//取引用
-							const_cast<TKey&>(m_current.Key) = *(ptr->GetAt(m_index).Key);
-							m_current.Value = *(ptr->GetAt(m_index).Value);
-							return *this;
+				DictionaryEnumerator(Entry * begin, Entry * end) :m_iter(begin), m_end(end), Base(&this->m_current) {}
+				DictionaryEnumerator(DictionaryEnumerator const&rhs) :m_current(rhs.m_current), m_iter(rhs.m_iter), m_end(rhs.m_end), Base(rhs.CurrentObject) {}
+				virtual Iteration::EnumerationResult MoveNext() final {
+					while (m_iter != m_end)
+					{
+						if (m_iter->Hash > 0)
+						{
+							m_current.Set(*m_iter->Key, *m_iter->Value);
+							m_iter++;
+							return Iteration::EnumerationResult::Successful;
 						}
-						m_index++;
+						m_iter++;
 					}
+					return Iteration::EnumerationResult::EOE;
+				}
+				virtual DictionaryEnumerator& operator=(Iteration::IEnumerator<T>const&rhs)final {
+					this->m_iter = static_cast<DictionaryEnumerator const&>(rhs).m_iter;
+					this->m_end = static_cast<DictionaryEnumerator const&>(rhs).m_end;
+					this->m_current = static_cast<DictionaryEnumerator const&>(rhs).m_current;
 					return *this;
 				}
-				inline Iterator&operator--() {
-					m_index--
-					while (m_index > 0) {
-						if (ptr->GetAt(m_index).Hash >= 0) {
-							const_cast<TKey&>(m_current.Key) = *(ptr->GetAt(m_index).Key);
-							m_current.Value = *(ptr->GetAt(m_index).Value);
-							return *this;
-						}
-						m_index--;
-					}
-					return *this;
-				}
-				inline Iterator&operator++(int t) {
-					m_index++;
-					while (m_index < ptr->Count()) {
-						if (ptr->GetAt(m_index).Hash > 0) {
-							const_cast<TKey&>(m_current.Key) = *(ptr->GetAt(m_index).Key);
-							m_current.Value = *(ptr->GetAt(m_index).Value);
-							return *this;
-						}
-						m_index++;
-					}
-					return *this;
-				}
-				inline Iterator&operator--(int t) {
-					m_index--
-					while (m_index >= 0) {
-						if (ptr->GetAt(m_index).Hash > 0) {
-							const_cast<TKey&>(m_current.Key) = *(ptr->GetAt(m_index).Key);
-							m_current.Value = *(ptr->GetAt(m_index).Value);
-							return *this;
-						}
-						m_index--;
-					}
-					return *this;
-				}
-				inline T*operator->() {
-					return &m_current;
-				}
-				inline T const*operator->()const {
-					return &m_current;
-				}
-				friend inline bool operator==(Iterator const& it1, Iterator const& it2) {
-					return (it1.m_index == it2.m_index) && (it1.ptr == it2.ptr);
-				}
-				friend inline bool operator!=(Iterator const& it1, Iterator const& it2) {
-					return (it1.m_index != it2.m_index) || (it1.ptr != it2.ptr);
-				}
-				friend inline Iterator operator+(Iterator const& it, int t) {
-					return Iterator(it.ptr, it.m_index) + t;
-				}
-				friend inline Iterator operator-(Iterator const&it, int t) {
-					return Iterator(it.ptr, it.m_index) - t;
-				}
-				friend inline Iterator operator+(int t, Iterator const& it) {
-					return Iterator(it.ptr, it.m_index) + t;
-				}
-				inline T& CurrentReference() {
-					return m_current;
-				}
-				inline T const& CurrentReference()const {
-					return m_current;
-				}
-				inline operator T*() {
-					return &m_current;
-				}
-				inline operator T const*()const {
-					return &m_current;
+				virtual void* ClonePtr()const final {
+					return new DictionaryEnumerator(*this);
 				}
 			};
 
 			//字典容器
 			template<class TKey, class TValue>
-			class Dictionary sealed :public IDictionary<TKey, TValue>, public System::Interface::ICloneable<Dictionary<TKey, TValue>>
+			class Dictionary sealed :public IDictionary<TKey, TValue>, public System::Interface::ICloneable
 			{
 				template<class AnyT>
 				static atomic_type InnerGetHashCode(AnyT const&key) {
@@ -226,7 +156,6 @@ namespace HL
 				size_t m_count = 0;
 				atomic_type m_freelist = 0;
 				atomic_type m_freecount = 0;
-
 				void Initialize(size_t capcity) {
 					size_t size = Inner::Helper::GetPrime(capcity);
 					m_buckets = array<atomic_type>(size);
@@ -422,25 +351,13 @@ namespace HL
 						HL::Exception::Throw<HL::Exception::KeyNotFoundException>();
 					return *m_entries[index].Value;
 				}
-				//获得迭代器
-				Iterator<Dictionary<TKey, TValue>, KeyValuePair<TKey, TValue const>> begin()const {
-					return Iterator<Dictionary<TKey, TValue>, KeyValuePair<TKey, TValue const>>(this->m_entries);
+				virtual void* ClonePtr()const final{
+					return new Dictionary(*this);
 				}
-				//获得迭代器
-				Iterator<Dictionary<TKey, TValue>, KeyValuePair<TKey, TValue>> begin() {
-					return Iterator<Dictionary<TKey, TValue>, KeyValuePair<TKey, TValue>>(this->m_entries);
-				}
-				//获得迭代器
-				Iterator<Dictionary<TKey, TValue>, KeyValuePair<TKey, TValue const>> end()const {
-					return Iterator<Dictionary<TKey, TValue>, KeyValuePair<TKey, TValue const>>(this->m_entries, this->m_entries.Count());
-				}
-				//获得迭代器
-				Iterator<Dictionary<TKey, TValue>, KeyValuePair<TKey, TValue>> end() {
-					return Iterator<Dictionary<TKey, TValue>, KeyValuePair<TKey, TValue>>(this->m_entries, this->m_entries.Count());
-				}
-				
-				virtual Dictionary Clone()const {
-					return Dictionary(*this);
+				virtual uptr<Iteration::IEnumerator<KeyValuePair<TKey, TValue>>> GetEnumerator()const {
+					return newptr<DictionaryEnumerator<TKey, TValue>>(
+						const_cast<Entry*>(this->m_entries.GetData()), const_cast<Entry*>(this->m_entries.GetData() + this->m_entries.Count())
+						);
 				}
 				//析构
 				~Dictionary() {
@@ -457,10 +374,10 @@ namespace HL
 			typedef TValue ReturnType;
 		};
 		template<class TKey, class TValue>
-		struct Interface::IteratorSupportInterface<Generic::Dictionary<TKey, TValue>>
+		struct Interface::EnumerableSupportInterface<Generic::Dictionary<TKey, TValue>>
 		{
-			typedef Generic::Iterator<Generic::Dictionary<TKey, TValue>, Generic::KeyValuePair<TKey, TValue>> IteratorType;
-			typedef Generic::Iterator<Generic::Dictionary<TKey, TValue>, Generic::KeyValuePair<TKey, TValue const>> ConstIteratorType;
+			typedef uptr<Iteration::IEnumerator<Generic::KeyValuePair<TKey const&, TValue&>>> IteratorType;
+			typedef uptr<Iteration::IEnumerator<Generic::KeyValuePair<TKey const&, TValue&>>> ConstIteratorType;
 		};
 	}
 }

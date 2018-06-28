@@ -27,17 +27,27 @@ namespace HL
 				typedef Void ReturnType;
 			};
 
-			//为类型提供[智能指针<>]默认迭代器接口重载
+			//为类型提供[智能指针<>]获取枚举迭代器接口重载
 			//接口类型定义规范:
 			//typdef:
 			//IteratorType:迭代器类型
 			//ConstIteratorType:const迭代器类型
 			template<class T>
-			struct IteratorSupportInterface
+			struct EnumerableSupportInterface
 			{
 				typedef Void* IteratorType;
 				typedef Void* ConstIteratorType;
 			};
+			//为类型提供[智能指针<>]默认迭代器接口重载
+			//接口类型定义规范:
+			//typdef:
+			//UnReferenceType:解引用类型
+			template<class T>
+			struct IteratorSupportInterface
+			{
+				typedef Void* UnReferenceType;
+			};
+
 			//为类型提供[智能指针<>]的逆/协变转化
 			//接口类型定义规范:
 			//enum:
@@ -49,42 +59,15 @@ namespace HL
 			};
 
 			//可克隆接口
-			template<class T>
 			class ICloneable
 			{
-				template<bool Based,bool PriType,class AnyT>
-				struct Aid
-				{
-					static AnyT GetClone(AnyT const&target) {
-						return ((ICloneable<AnyT>*)&(target))->Clone();
-					}
-				};
-
-				template<bool Based,class AnyT>
-				struct Aid<Based, true, AnyT>
-				{
-					static AnyT GetClone(AnyT const&target) {
-						return AnyT(target);
-					}
-				};
-
-				template<bool PriType, class AnyT>
-				struct Aid<false, PriType, AnyT>
-				{
-					static AnyT GetClone(AnyT const&target) {
-						Exception::Throw<Exception::InterfaceNoImplementException>();
-						return *((AnyT*)nullptr);
-					}
-				};
-
 				template<bool Based, bool PriType, class AnyT>
 				struct AidPtr
 				{
 					static AnyT* GetClone(AnyT const&target) {
-						return new AnyT(((ICloneable<AnyT>*)&(target))->Clone());
+						return (AnyT*)static_cast<ICloneable const&>(target).ClonePtr();
 					}
 				};
-
 				template<bool Based, class AnyT>
 				struct AidPtr<Based, true, AnyT>
 				{
@@ -110,16 +93,14 @@ namespace HL
 					}
 				};
 			public:
-				virtual T Clone()const = 0;
-				//获得复制实例
-				static T GetClone(T const&target) {
-					return Aid<Template::IsBaseOf<ICloneable<T>, T>::R, Template::IsPrimitiveType<T>::R, T>::GetClone(target);
-				}
+				virtual void* ClonePtr()const = 0;
 				//获得复制实例(由new分配在堆上的对象)
+				template<class T>
 				static T* GetClonePtr(T const&target) {
-					return AidPtr<Template::IsBaseOf<ICloneable<T>, T>::R, Template::IsPrimitiveType<T>::R, T>::GetClone(target);
+					return AidPtr<Template::IsBaseOf<ICloneable, T>::R, Template::IsPrimitiveType<T>::R, T>::GetClone(target);
 				}
 			};
+
 		}
 	}
 }

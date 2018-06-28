@@ -14,7 +14,7 @@ namespace HL
 				static void* internal_alloc(size_t size) {
 					void* ret = malloc(size);
 					if (ret == nullptr)
-						Exception::Throw<Exception::BadAllocateException>(size);
+						HL::Exception::Throw<HL::Exception::BadAllocateException>(size);
 					return ret;
 				} 
 				static void internal_free(void*ptr) {

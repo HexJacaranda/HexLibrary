@@ -10,30 +10,61 @@ namespace HL
 		}	
 		namespace UPointer
 		{
-			template<class U>class uptr;
+			template<class U>
+			class uptr;
 			class uobject;
 		}
+		template<class T>
+		using uptr = UPointer::uptr<T>;
+		using uobject = UPointer::uobject;
 		namespace Generic
 		{
+			template<class TKey, class TValue>
+			class KeyValuePair
+			{
+				TKey* m_key = nullptr;
+				TValue* m_value = nullptr;
+			public:
+				KeyValuePair() = default;
+				TKey &Key() {
+					return *m_key;
+				}
+				TValue &Value() {
+					return *m_value;
+				}
+				TKey const&Key()const {
+					return *m_key;
+				}
+				TValue const&Value()const {
+					return *m_value;
+				}
+				void Set(TKey &Key, TValue&Value) {
+					this->m_key = &Key;
+					this->m_value = &Value;
+				}
+				KeyValuePair(TKey&Key, TValue&Value) :m_key(&Key), m_value(&Value) {}
+				KeyValuePair&operator=(KeyValuePair const&rhs) {
+					this->m_key = rhs.m_key;
+					this->m_value = rhs.m_value;
+					return *this;
+				}
+			};
 			template<class T>
 			class ICollection;
 			template<class TKey, class TValue>
 			class IDictionary;
-			template<class T>
-			class IReadOnlyCollection;
-			template<class TT>class Array;
+			template<class TT>
+			class Array;
 			template<class TKey, class TValue>
 			class Dictionary;
 			template<class T>
 			using UArray = UPointer::uptr<Array<T>>;
-
 			template<class T>
 			using UICollection = UPointer::uptr<ICollection<T>>;
-			template<class T>
-			using UIReadOnlyCollection = UPointer::uptr<IReadOnlyCollection<T>>;
 		}
 		namespace Functional
 		{
+			class Auto;
 			template<class R,class...Args>
 			class Delegate;
 			template<class R, class...Args>
@@ -41,8 +72,7 @@ namespace HL
 		}
 		namespace Reference
 		{
-			class IntPtr;
-			template<class T>class COMPtr;
+			template<class T>class Ref;
 		}
 		namespace Threading
 		{
@@ -64,6 +94,14 @@ namespace HL
 		}
 		namespace Container {
 			template<class...Args>class Tuple;
+		}
+		namespace Linq
+		{
+			template<typename T>
+			class LinqQueryResult;
+			template<typename T>
+			class LinqBase;
+
 		}
 		template<class CharT>class BasicString;
 		typedef BasicString<wchar_t> String;

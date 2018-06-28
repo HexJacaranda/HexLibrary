@@ -106,14 +106,26 @@ namespace HL
 				template<class T>
 				static T Await(AsyncResult<T>const&result) {
 					if (result.thread.IsNull())
-						Exception::Throw<Exception::ArgumentNullException>();
+						HL::Exception::Throw<HL::Exception::ArgumentNullException>();
 					result.thread->Join();
 					return result.thread->pack->async_ret;
 				}
 				static void Await(AsyncResult<void> const&result) {
 					if (result.thread.IsNull())
-						Exception::Throw<Exception::ArgumentNullException>();
+						HL::Exception::Throw<HL::Exception::ArgumentNullException>();
 					result.thread->Join();
+				}
+				inline static void Delay(DWORD MilSec)
+				{
+					Sleep(MilSec);
+				}
+				template<class T>
+				static uptr<Generic::Array<T>> Await(Iteration::IEnumerator<AsyncResult<T>>const& results)
+				{
+					auto ret = newptr<Generic::Array<T>>();
+					for (auto&result : results)
+						ret->Add(result);
+					return ret;
 				}
 				//异步执行
 				template<class T,class...Args>
@@ -131,7 +143,7 @@ namespace HL
 				}
 				//异步执行
 				template<class...Args,class Functor>
-				static AsyncResult<typename Functional::Inner::GetFunctionInfo<Functor>::R> Run(Functor fx, Args const&...args)
+				static AsyncResult<typename Template::GetFunctionInfo<Functor>::R> Run(Functor fx, Args const&...args)
 				{
 					Functional::Delegate<Functional::Auto>Func = Bind(fx);
 					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(Func, nullptr, Functional::params(args...));
@@ -140,7 +152,7 @@ namespace HL
 				}
 				//异步执行
 				template<class...Args, class TT, class Functor>
-				static AsyncResult<typename Functional::Inner::GetFunctionInfo<Functor>::R> Run(Functor fx, TT*obj, Args const&...args)
+				static AsyncResult<typename Template::GetFunctionInfo<Functor>::R> Run(Functor fx, TT*obj, Args const&...args)
 				{
 					Functional::Delegate<Functional::Auto>Func = Bind(fx, obj);
 					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(Func, nullptr, Functional::params(args...));

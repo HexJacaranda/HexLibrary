@@ -441,5 +441,104 @@ namespace HL
 		public:\
 			static constexpr bool R = (sizeof(Test<TT>(nullptr)) == sizeof(char));\
 		};
+
+
+		template<class...Args>
+		struct TypeList
+		{
+			static constexpr int Count = sizeof...(Args);
+		};
+
+		template<int index, class Sign>
+		struct TypeListGetAt;
+		template<int index, class T, class...Args>
+		struct TypeListGetAt<index, TypeList<T, Args...>>
+		{
+			typedef typename TypeListGetAt<index - 1, TypeList<Args...>>::T T;
+		};
+		template<class T, class...Args>
+		struct TypeListGetAt<0, TypeList<T, Args...>>
+		{
+			typedef T T;
+		};
+
+
+		template<class Functor>
+		struct GetFunctionInfoImpl {
+			enum { Type = -1 };
+			typedef HL::Void R;
+			typedef TypeList<Void> Types;
+		};
+
+		template<bool R, class FirstT, class Functor>
+		struct RetSwitch
+		{
+			typedef FirstT R;
+		};
+		template<class FirstT, class Functor>
+		struct RetSwitch<true, FirstT, Functor>
+		{
+			typedef typename GetFunctionInfoImpl<decltype(&Functor::operator())>::R R;
+		};
+		template<bool R, class FirstT, class Functor>
+		struct TypesSwitch
+		{
+			typedef FirstT R;
+		};
+		template<class FirstT, class Functor>
+		struct TypesSwitch<true, FirstT, Functor>
+		{
+			typedef typename GetFunctionInfoImpl<decltype(&Functor::operator())>::Types R;
+		};
+
+
+		template<class Ret, class...Args>
+		struct GetFunctionInfoImpl<Ret(__stdcall*)(Args...)>
+		{
+			typedef Ret R;
+			typedef TypeList<Args...> Types;
+		};
+		template<class Ret, class...Args>
+		struct GetFunctionInfoImpl<Ret(__cdecl*)(Args...)>
+		{
+			typedef Ret R;
+			typedef TypeList<Args...> Types;
+		};
+		template<class Ret, class...Args>
+		struct GetFunctionInfoImpl<Ret(__fastcall*)(Args...)>
+		{
+			typedef Ret R;
+			typedef TypeList<Args...> Types;
+		};
+		template<class Ret, class...Args>
+		struct GetFunctionInfoImpl<Ret(__vectorcall*)(Args...)>
+		{
+			typedef Ret R;
+			typedef TypeList<Args...> Types;
+		};
+
+		template<class TT, class Ret, class...Args>
+		struct GetFunctionInfoImpl<Ret(TT::*)(Args...)>
+		{
+			typedef Ret R;
+			typedef TypeList<Args...> Types;
+		};
+
+		template<class TT, class Ret, class...Args>
+		struct GetFunctionInfoImpl<Ret(TT::*)(Args...)const>
+		{
+			typedef Ret R;
+			typedef TypeList<Args...> Types;
+		};
+
+		template<class Functor>
+		struct GetFunctionInfo {
+		public:
+			typedef typename GetFunctionInfoImpl<Functor>::R FirstT;//«∞÷√≈–∂œ
+			typedef typename GetFunctionInfoImpl<Functor>::Types FirstTypes;
+
+			typedef typename RetSwitch<Template::IsSame<HL::Void, FirstT>::R, FirstT, Functor>::R R;
+			typedef typename TypesSwitch<Template::IsSame<TypeList<HL::Void>, FirstTypes>::R, FirstTypes, Functor>::R Types;
+		};
 	}
 }

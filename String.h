@@ -233,126 +233,6 @@ namespace HL
 		namespace Internal
 		{
 			template<class CharT>
-			bool BasicStringSingleMatch(const CharT*target_string, const CharT* source, size_t target_length) {
-				//预判
-				if (target_string[0] == source[0] && target_string[target_length - 1] == source[target_length - 1]) {
-					for (index_t i = 1; i < target_length - 1; ++i) {
-						if (target_string[i] != source[i])
-							return false;
-					}
-					return true;
-				}
-				return false;
-			}
-			template<class CharT>
-			bool BasicStringEquals(const CharT*target_string, const CharT* source, size_t target_length, size_t source_length) {
-				if (target_length != source_length)
-					return false;
-				//预判
-				if (target_string[0] == source[0] && target_string[target_length - 1] == source[target_length - 1]) {
-					for (index_t i = 1; i < target_length - 1; ++i) {
-						if (target_string[i] != source[i])
-							return false;
-					}
-					return true;
-				}
-				return false;
-			}
-			template<class CharT>
-			index_t BasicStringIndexOf(const CharT*target_string, const CharT* source, size_t target_length, size_t source_length, index_t start_index, index_t end_index) {
-				//预判处理
-				if (!target_string || !source)
-					return -1;
-				if (start_index > end_index)
-					return -1;
-				if (start_index < 0 && end_index >= source_length)
-					return -1;
-				if (end_index - start_index < target_length)
-					return -1;
-
-				index_t current_index = start_index;
-				for (;;) {
-					if (current_index + target_length > end_index)
-						return -1;
-					if (target_string[0] == source[current_index])
-					{
-						bool ret = BasicStringSingleMatch(target_string, source + current_index, target_length);
-						if (ret)
-							return current_index;
-					}
-					++current_index;
-				}
-			}
-			template<class CharT>
-			index_t BasicStringLastIndexOf(const CharT*target_string, const CharT* source, size_t target_length, size_t source_length, index_t start_index, index_t end_index) {
-				//预判处理
-				if (!target_string || !source)
-					return -1;
-				if (start_index > end_index)
-					return -1;
-				if (start_index < 0 && end_index >= source_length)
-					return -1;
-				if (end_index - start_index < target_length)
-					return -1;
-
-				index_t current_index = end_index;
-				for (;;) {
-					if (current_index - target_length < start_index)
-						return -1;
-					if (target_string[target_length - 1] == source[current_index])
-					{
-						bool ret = BasicStringSingleMatch(target_string, source + current_index - target_length + 1, target_length);
-						if (ret)
-							return (current_index - target_length + 1);
-					}
-					--current_index;
-				}
-			}
-			template<class CharT>
-			static void BasicStringIndexOfAll(const CharT*target_string, const CharT*source, Memory::MemoryManager<index_t>&Out, size_t target_length, size_t source_length, index_t start_index, index_t end_index) {
-				if (!target_string || !source)
-					return;
-				if (start_index > end_index)
-					return;
-				if (start_index < 0 && end_index >= source_length)
-					return;
-				if (end_index - start_index < target_length)
-					return;
-
-				index_t current_index = start_index;
-				for (;;)
-				{
-					index_t ret = BasicStringIndexOf(target_string, source, target_length, source_length, current_index, end_index);
-					if (ret == -1)
-						break;
-					else
-					{
-						current_index = ret + target_length;
-						Out.Append(ret);
-					}
-				}
-			}
-			template<class CharT>
-			index_t BasicStringIndexOfAny(const CharT*target_string, const CharT* source, size_t target_length, size_t source_length, index_t start_index, index_t end_index) {
-				index_t current_index = start_index;
-				for (;;) {
-					for (index_t i = 0; i < target_length; i++)
-						if (target_string[i] == source[current_index + i])
-							return current_index + i;
-					++source;
-				}
-			}
-			template<class CharT>
-			size_t BasicStringLength(const CharT*target_string) {
-				size_t i = 0;
-				for (;;) {
-					if (target_string[i] == (CharT)'\0')
-						return i;
-					++i;
-				}
-			}
-
-			template<class CharT>
 			struct BasicStringUpperLower
 			{
 				inline static bool IsLower(CharT c) {
@@ -432,7 +312,7 @@ namespace HL
 		}
 
 		template<class CharT>
-		class BasicString:public System::Hash::ISupportHash,public System::Interface::ICloneable<BasicString<CharT>>
+		class BasicString:public System::Hash::ISupportHash,public System::Interface::ICloneable
 		{
 			typedef Memory::MemoryManager<CharT> ContainerT;
 			ContainerT data;
@@ -459,8 +339,8 @@ namespace HL
 					return;
 				if (StartInx < 0 && EndInx >= this->Count())
 					return;
-				size_t old_length = Internal::BasicStringLength(Old);
-				size_t new_length = Internal::BasicStringLength(New);
+				size_t old_length = Algorithm::BasicStringLength(Old);
+				size_t new_length = Algorithm::BasicStringLength(New);
 				index_t differ = new_length - old_length;
 				Memory::MemoryManager<index_t> outer;
 				Internal::BasicStringIndexOfAll(Old, this->data.GetMemoryBlock(), outer, old_length, this->Count(), StartInx, EndInx);
@@ -494,7 +374,7 @@ namespace HL
 			template<class...Args>
 			static void FormatInternal(const CharT*format, ContainerT*out, Args const&...args);
 		public:
-			BasicString() :data(0) {}
+			BasicString():data(0) {}
 			BasicString(size_t length) :data(length) {}
 			BasicString(BasicString const&rhs) :data(rhs.data) {}
 			BasicString(ContainerT const&rhs) :data(rhs) {
@@ -512,7 +392,7 @@ namespace HL
 				if (string)
 				{
 					this->BeginWrite();
-					this->data.Append(string, Internal::BasicStringLength(string));
+					this->data.Append(string, Algorithm::BasicStringLength(string));
 					this->EndWrite();
 				}
 			}
@@ -529,7 +409,7 @@ namespace HL
 			BasicString&operator=(const CharT*string) {
 				if (string)
 				{
-					this->data.ReWrite(string, Internal::BasicStringLength(string));
+					this->data.ReWrite(string, Algorithm::BasicStringLength(string));
 					this->EndWrite();
 				}
 				return *this;
@@ -553,10 +433,10 @@ namespace HL
 				return ret;
 			}
 			bool operator==(BasicString const&rhs)const {
-				return Internal::BasicStringEquals(this->data.GetMemoryBlock(), rhs.data.GetMemoryBlock(), this->data.GetUsedSize() - 1, rhs.data.GetUsedSize() - 1);
+				return Algorithm::BasicStringEquals(this->data.GetMemoryBlock(), rhs.data.GetMemoryBlock(), this->data.GetUsedSize() - 1, rhs.data.GetUsedSize() - 1);
 			}
 			bool operator==(const CharT* string)const {
-				return Internal::BasicStringEquals(this->data.GetMemoryBlock(), string, this->data.GetUsedSize() - 1, Internal::BasicStringLength(string));
+				return Algorithm::BasicStringEquals(this->data.GetMemoryBlock(), string, this->data.GetUsedSize() - 1, Algorithm::BasicStringLength(string));
 			}
 			//追加字符串
 			void Append(BasicString const&rhs) {
@@ -569,7 +449,7 @@ namespace HL
 				if (string)
 				{
 					this->BeginWrite();
-					this->data.Append(string, Internal::BasicStringLength(string));
+					this->data.Append(string, Algorithm::BasicStringLength(string));
 					this->EndWrite();
 				}
 			}
@@ -623,51 +503,51 @@ namespace HL
 			}
 			//查找区间:[start_index,end_index]
 			index_t IndexOf(const CharT* string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Algorithm::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Algorithm::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t IndexOf(const CharT* string, index_t start_index)const {
-				return Internal::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
+				return Algorithm::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Algorithm::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t IndexOf(const CharT* string)const {
-				return Internal::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
+				return Algorithm::BasicStringIndexOf(string, this->data.GetMemoryBlock(), Algorithm::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//查找区间:[start_index,end_index]
 			index_t IndexOf(BasicString const& string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Algorithm::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t IndexOf(BasicString const& string, index_t start_index)const {
-				return Internal::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
+				return Algorithm::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t IndexOf(BasicString const& string)const {
-				return Internal::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
+				return Algorithm::BasicStringIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//查找区间:[start_index,end_index]
 			index_t LastIndexOf(const CharT* string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Algorithm::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Algorithm::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t LastIndexOf(const CharT* string, index_t start_index)const {
-				return Internal::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
+				return Algorithm::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Algorithm::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t LastIndexOf(const CharT* string)const {
-				return Internal::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
+				return Algorithm::BasicStringLastIndexOf(string, this->data.GetMemoryBlock(), Algorithm::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//查找区间:[start_index,end_index]
 			index_t LastIndexOf(BasicString const& string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Algorithm::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t LastIndexOf(BasicString const& string, index_t start_index)const {
-				return Internal::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
+				return Algorithm::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t LastIndexOf(BasicString const& string)const {
-				return Internal::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
+				return Algorithm::BasicStringLastIndexOf(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//替换字符串
 			void Replace(const CharT* oldstring, const CharT* newstring) {
@@ -695,27 +575,27 @@ namespace HL
 			}
 			//查找区间:[start_index,end_index]
 			index_t IndexOfAny(const CharT* string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Algorithm::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t IndexOfAny(const CharT* string, index_t start_index)const {
-				return Internal::BasicStringIndexOfAny(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
+				return Algorithm::BasicStringIndexOfAny(string, this->data.GetMemoryBlock(), Algorithm::BasicStringLength(string), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t IndexOfAny(const CharT* string)const {
-				return Internal::BasicStringIndexOfAny(string, this->data.GetMemoryBlock(), Internal::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
+				return Algorithm::BasicStringIndexOfAny(string, this->data.GetMemoryBlock(), Algorithm::BasicStringLength(string), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//查找区间:[start_index,end_index]
 			index_t IndexOfAny(BasicString const& string, index_t start_index, index_t end_index)const {
-				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
+				return Algorithm::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, end_index);
 			}
 			//查找区间:[start_index,end]
 			index_t IndexOfAny(BasicString const& string, index_t start_index)const {
-				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
+				return Algorithm::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, start_index, this->Count() - 1);
 			}
 			//查找区间:[0,end]
 			index_t IndexOfAny(BasicString const& string)const {
-				return Internal::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
+				return Algorithm::BasicStringIndexOfAny(string.GetData(), this->data.GetMemoryBlock(), string.Count(), this->data.GetUsedSize() - 1, 0, this->Count() - 1);
 			}
 			//截取[start_index,end_index]内的字符串
 			BasicString SubString(index_t start_index, index_t end_index)const {
@@ -743,7 +623,7 @@ namespace HL
 			//以分隔符分割字符串
 			Generic::Array<BasicString> Split(const CharT *separator)const {
 				Generic::Array<BasicString> ret;
-				size_t length = Internal::BasicStringLength(separator);
+				size_t length = Algorithm::BasicStringLength(separator);
 				index_t last_index = -(index_t)length;
 				index_t result = 0;
 				for (;;) {
@@ -765,11 +645,11 @@ namespace HL
 			}
 			//转换为大写
 			void ToUpper() {
-				Internal::BasicStringUpperLower<CharT>::ToUpper(this->data.GetMemoryBlock());
+				Algorithm::BasicStringUpperLower<CharT>::ToUpper(this->data.GetMemoryBlock());
 			}
 			//转换为小写
 			void ToLower() {
-				Internal::BasicStringUpperLower<CharT>::ToLower(this->data.GetMemoryBlock());
+				Algorithm::BasicStringUpperLower<CharT>::ToLower(this->data.GetMemoryBlock());
 			}
 			//去掉两端空格
 			void Trim() {
@@ -837,14 +717,14 @@ namespace HL
 			static BasicString Format(const CharT*format, Args const&...args) {
 				ContainerT ret;
 				FormatInternal(format, &ret, args...);
+				ret.ShrinkToFit();
 				return ret;
 			}
 			virtual size_t GetHashCode()const final {
 				return Hash::Hash::HashSeq(this->GetData(), this->Count());
 			}
-
-			virtual BasicString<CharT> Clone()const {
-				return BasicString<CharT>(*this);
+			virtual void* ClonePtr()const final{
+				return new BasicString<CharT>(*this);
 			}
 		};
 
@@ -946,7 +826,7 @@ namespace HL
 		template<class ...Args>
 		inline void BasicString<CharT>::FormatInternal(const CharT * format, ContainerT * out, Args const & ...args)
 		{
-			size_t length = Internal::BasicStringLength(format);
+			size_t length = Algorithm::BasicStringLength(format);
 			out->Append(format, length);
 			Memory::MemoryManager<Container::Tuple<index_t, index_t, index_t, size_t>>outer;//容器,用于存放占位符位置极其信息 {左括号处索引,中间整数,右括号处索引}
 			Memory::MemoryManager<BasicString<CharT>>to_string(sizeof...(Args)); //容器,用于存放args参数转换为的string

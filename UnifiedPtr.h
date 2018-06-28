@@ -112,8 +112,6 @@ namespace HL
 				uptr&operator=(nullptr_t);
 				T*operator->();
 				T const*operator->()const;
-				T& operator*();
-				T const& operator*()const;
 				//将当前指针置空
 				void SetToNull();
 				//检查当前指针是否有效
@@ -130,13 +128,16 @@ namespace HL
 				uptr<T> Clone()const;
 				template<class U, class Converter>
 				uptr<U> Cast(Converter);
+				template<class U>
+				void SetValue(uptr<U> const&);
 				~uptr();
 			private: //特性行为拓展
 				typedef typename Interface::IndexerSupportInterface<T>::IndexType IndexType;
 				typedef typename Interface::IndexerSupportInterface<T>::ReturnType IndexRetType;
 				typedef typename Interface::FunctorSupportInterface<T>::ReturnType FunctorRetType;
-				typedef typename Interface::IteratorSupportInterface<T>::IteratorType IterType;
-				typedef typename Interface::IteratorSupportInterface<T>::ConstIteratorType ConstIterType;
+				typedef typename Interface::EnumerableSupportInterface<T>::IteratorType IterType;
+				typedef typename Interface::EnumerableSupportInterface<T>::ConstIteratorType ConstIterType;
+				typedef typename Interface::IteratorSupportInterface<T>::UnReferenceType UnRefType;
 			public:
 				inline IndexRetType& operator[](IndexType const&index) {
 					return this->m_ptr->operator[](index);
@@ -159,6 +160,34 @@ namespace HL
 				}
 				inline IterType end() {
 					return this->m_ptr->end();
+				}
+				inline uptr& operator++() {
+					(*(this->m_ptr))++;
+					return *this;
+				}
+				inline uptr& operator--() {
+					(*(this->m_ptr))--;
+					return *this;
+				}
+				inline uptr& operator--(int) {
+					(*(this->m_ptr))--;
+					return *this;
+				}
+				inline uptr& operator++(int) {
+					(*(this->m_ptr))++;
+					return *this;
+				}
+				inline UnRefType& operator*() {
+					return *(*this->m_ptr);
+				}
+				inline UnRefType const& operator*()const {
+					return *(*this->m_ptr);
+				}
+				inline bool operator==(uptr const&rhs)const {
+					return *this->m_ptr == *rhs.m_ptr;
+				}
+				inline bool operator!=(uptr const&rhs)const {
+					return *this->m_ptr != *rhs.m_ptr;
 				}
 			public:
 				operator uobject()const;
@@ -368,18 +397,6 @@ namespace HL
 			inline T const * uptr<T>::operator->() const
 			{
 				return this->m_ptr;
-			}
-
-			template<class T>
-			inline T & uptr<T>::operator*()
-			{
-				return *this->m_ptr;
-			}
-
-			template<class T>
-			inline T const & uptr<T>::operator*() const
-			{
-				return *this->m_ptr;
 			}
 
 			template<class T>
@@ -731,6 +748,13 @@ namespace HL
 					}
 				}
 				return ret;
+			}
+
+			template<class T>
+			template<class U>
+			inline void uptr<T>::SetValue(uptr<U> const &rhs)
+			{
+				*this->m_ptr = *rhs.m_ptr;
 			}
 
 			template<class T>

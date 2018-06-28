@@ -182,89 +182,14 @@ namespace HL
 
 			namespace Inner
 			{
-
-				template<class Functor>
-				struct GetFunctionInfoImpl {
-					enum { Type = -1 };
-					typedef HL::Void R;
-					typedef System::Convariance::TypeList<Void> Types;
-				};
-				template<class Ret, class...Args>
-				struct GetFunctionInfoImpl<Ret(__stdcall*)(Args...)>
-				{
-					typedef Ret R;
-					typedef System::Convariance::TypeList<Args...> Types;
-				};
-				template<class Ret, class...Args>
-				struct GetFunctionInfoImpl<Ret(__cdecl*)(Args...)>
-				{
-					typedef Ret R;
-					typedef System::Convariance::TypeList<Args...> Types;
-				};
-				template<class Ret, class...Args>
-				struct GetFunctionInfoImpl<Ret(__fastcall*)(Args...)>
-				{
-					typedef Ret R;
-					typedef System::Convariance::TypeList<Args...> Types;
-				};
-				template<class Ret, class...Args>
-				struct GetFunctionInfoImpl<Ret(__vectorcall*)(Args...)>
-				{
-					typedef Ret R;
-					typedef System::Convariance::TypeList<Args...> Types;
-				};
-
-				template<class TT, class Ret, class...Args>
-				struct GetFunctionInfoImpl<Ret(TT::*)(Args...)>
-				{
-					typedef Ret R;
-					typedef System::Convariance::TypeList<Args...> Types;
-				};
-
-				template<class TT, class Ret, class...Args>
-				struct GetFunctionInfoImpl<Ret(TT::*)(Args...)const>
-				{
-					typedef Ret R;
-					typedef System::Convariance::TypeList<Args...> Types;
-				};
-
-				template<bool R, class FirstT, class Functor>
-				struct RetSwitch
-				{
-					typedef FirstT R;
-				};
-				template<class FirstT, class Functor>
-				struct RetSwitch<true, FirstT, Functor>
-				{
-					typedef typename GetFunctionInfoImpl<decltype(&Functor::operator())>::R R;
-				};
-
-				template<bool R, class FirstT, class Functor>
-				struct TypesSwitch
-				{
-					typedef FirstT R;
-				};
-				template<class FirstT, class Functor>
-				struct TypesSwitch<true, FirstT, Functor>
-				{
-					typedef typename GetFunctionInfoImpl<decltype(&Functor::operator())>::Types R;
-				};
-
-				template<class Functor>
-				struct GetFunctionInfo {
-				public:
-					typedef typename GetFunctionInfoImpl<Functor>::R FirstT;//前置判断
-					typedef typename GetFunctionInfoImpl<Functor>::Types FirstTypes;
-
-					typedef typename RetSwitch<Template::IsSame<HL::Void, FirstT>::R, FirstT, Functor>::R R;
-					typedef typename TypesSwitch<Template::IsSame<System::Convariance::TypeList<HL::Void>, FirstTypes>::R, FirstTypes, Functor>::R Types;
-				};
-
 				template<class R, class Holder, class Functor>
-				struct IDelegateConstruct {};
+				struct IDelegateConstruct 
+				{
+				
+				};
 
 				template<class R, class Functor, class...Args>
-				struct IDelegateConstruct<R, System::Convariance::TypeList<Args...>, Functor>
+				struct IDelegateConstruct<R, Template::TypeList<Args...>, Functor>
 				{
 					inline static Delegate<R, Args...> Construct(Functor functor);
 					template<class TT>
@@ -293,7 +218,7 @@ namespace HL
 				template<class OR,class...Others>
 				friend class Delegate;
 				//签名
-				typedef  System::Convariance::TypeList<Args...> MySignature;
+				typedef Template::TypeList<Args...> MySignature;
 
 				//返回类型
 				typedef typename Template::If<UPointer::IsUPtr<R>::R, typename UPointer::IsUPtr<R>::InnerType, R>::T RRet;
@@ -385,7 +310,7 @@ namespace HL
 			{
 				template<class OR, class...Others>
 				friend class Delegate;
-				typedef System::Convariance::TypeList<Auto> MySignature;
+				typedef Template::TypeList<Auto> MySignature;
 				//指针
 				Internal::DelegateBase*method_ptr = nullptr;
 			public:
@@ -471,13 +396,13 @@ namespace HL
 			{
 				template<class R, class Functor, class ...Args>
 				template<class TT>
-				inline Delegate<R, Args...> IDelegateConstruct<R, System::Convariance::TypeList<Args...>, Functor>::Construct(Functor functor, TT * object)
+				inline Delegate<R, Args...> IDelegateConstruct<R, Template::TypeList<Args...>, Functor>::Construct(Functor functor, TT * object)
 				{
 					return new Internal::IDelegate<R(__stdcall TT::*)(Args...), Functor>(functor, object);
 				}
 
 				template<class R, class Functor, class ...Args>
-				inline Delegate<R, Args...> IDelegateConstruct<R, System::Convariance::TypeList<Args...>, Functor>::Construct(Functor functor)
+				inline Delegate<R, Args...> IDelegateConstruct<R, Template::TypeList<Args...>, Functor>::Construct(Functor functor)
 				{
 					return new Internal::IDelegate<R(__stdcall)(Args...), Functor>(functor);
 				}
@@ -485,14 +410,14 @@ namespace HL
 
 			template<class Functor>
 			auto Bind(Functor Target) {
-				typedef typename Inner::GetFunctionInfo<Functor>::Types Type;
-				typedef typename Inner::GetFunctionInfo<Functor>::R R;
+				typedef typename Template::GetFunctionInfo<Functor>::Types Type;
+				typedef typename Template::GetFunctionInfo<Functor>::R R;
 				return Inner::IDelegateConstruct<R, Type, Functor>::Construct(Target);
 			}
 			template<class Functor,class TT>
 			auto Bind(Functor Target,TT*ObjectPtr) {
-				typedef typename Inner::GetFunctionInfo<Functor>::Types Type;
-				typedef typename Inner::GetFunctionInfo<Functor>::R R;
+				typedef typename Template::GetFunctionInfo<Functor>::Types Type;
+				typedef typename Template::GetFunctionInfo<Functor>::R R;
 				return Inner::IDelegateConstruct<R, Type, Functor>::Construct(Target, ObjectPtr);
 			}
 

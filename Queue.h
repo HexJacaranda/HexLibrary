@@ -238,6 +238,9 @@ namespace HL
 					ptr->Index = Priority;
 					
 				}
+				size_t Count()const {
+					return m_count;
+				}
 			};
 		}
 	}

@@ -31,7 +31,7 @@ namespace HL
 						T*object_ptr = (T*)this->object;
 						reference_resource<T> *ret = new reference_resource<T>();
 						ret->reference_counter = 1;
-						ret->object = Interface::ICloneable<T>::GetClonePtr(*object_ptr);
+						ret->object = Interface::ICloneable::GetClonePtr<T>(*object_ptr);
 						return ret;
 					}
 				};
@@ -78,7 +78,8 @@ namespace HL
 					}
 					virtual System::UPointer::uptr_resource* clone()const final
 					{
-						Exception::Throw<Exception::InterfaceNoImplementException>();
+						HL::Exception::Throw<HL::Exception::InterfaceNoImplementException>();
+						return nullptr;
 					}
 				};
 
@@ -174,6 +175,31 @@ namespace HL
 			inline static atomic_type ref_type_id() {
 				return System::UPointer::resource_keeper_type_id<InternalAdopt::reference_keeper>();
 			}
+			template<class T>
+			class Ref
+			{
+				T*m_object = nullptr;
+			public:
+				Ref(T&object) :m_object(&object) {}
+				Ref(Ref const&rhs) :m_object(rhs.m_object) {}
+				bool IsValid()const {
+					return this->m_object != nullptr;
+				}
+				Ref& operator=(T&object) {
+					this->m_object = &object;
+					return *this;
+				}
+				Ref& operator=(Ref const&rhs) {
+					this->m_object = rhs.m_object;
+					return *this;
+				}
+				operator T&() {
+					return *this->m_object;
+				}
+				operator T const&()const {
+					return *this->m_object;
+				}
+			};
 		}
 	}
 	namespace Exception

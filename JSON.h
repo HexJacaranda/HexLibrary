@@ -3,7 +3,6 @@ namespace HL
 {
 	namespace System
 	{
-
 		namespace Exception
 		{
 			class JsonParseException:public HL::Exception::IException

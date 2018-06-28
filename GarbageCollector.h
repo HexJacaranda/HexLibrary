@@ -215,7 +215,7 @@ namespace HL
 				virtual System::UPointer::uptr_resource* clone()const final{
 					InternalAdopt::managed_resource<T> * ptr = new InternalAdopt::managed_resource<T>;
 					T*object_ptr = (T*)this->object;
-					T*new_object = Interface::ICloneable<T>::GetClonePtr(*object_ptr);
+					T*new_object = Interface::ICloneable::GetClonePtr<T>(*object_ptr);
 					Internal::GCObjectBase*base = new Internal::GCObject<T>(new_object);
 					ptr->tracker = Internal::Tracker::NewInstance();
 					ptr->tracker->reference_target = base;

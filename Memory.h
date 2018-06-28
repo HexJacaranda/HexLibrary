@@ -324,7 +324,10 @@ namespace HL
 					if (m_used == 0)
 						Clear();
 					else
-						internal_resize(m_used);
+					{
+						m_data = (T*)Allocator::ReAllocTransfer(m_data, m_used * sizeof(T), sizeof(T)*m_used);
+						m_max = m_used;
+					}
 				}
 			}
 

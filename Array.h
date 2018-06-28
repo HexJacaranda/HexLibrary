@@ -5,338 +5,38 @@ namespace HL
 	{
 		namespace Generic
 		{
-			//排序
-			namespace Sort
-			{
-				template<class T>
-				class SortCache
-				{
-					char*m_cache = nullptr;
-				public:
-					SortCache()
-					{
-						this->m_cache = (char*)Memory::Allocator::Alloc(sizeof(T));
-					}
-					void WriteCache(T const&Object) {
-						if (m_cache)
-							Memory::Allocator::MemoryCopy(&Object, this->m_cache, sizeof(T), sizeof(T));
-					}
-					void ReadCache(T&Target)const {
-						if (m_cache)
-							for (int i = 0; i < sizeof(T); ++i)
-								((char*)&Target)[i] = this->m_cache[i];
-					}
-					operator T&() {
-						return *(T*)m_cache;
-					}
-					operator T const&()const {
-						return *(T*)m_cache;
-					}
-					~SortCache() {
-						if (m_cache)
-						{
-							Memory::Allocator::Free(m_cache);
-							m_cache = nullptr;
-						}
-					}
-				};
-				namespace Inner
-				{
-					template<class U>
-					static void SortRaw(U*Array, index_t Low, index_t High, SortCache<U>&Cache) {
-						if (Low >= High)
-							return;
-						atomic_type first = Low;
-						atomic_type last = High;
-						Cache.WriteCache(Array[first]);
-						while (first < last)
-						{
-							while (first < last&&Array[last] >= Cache)
-								--last;
-							Array[first] = Array[last];
-							while (first < last&&Array[first] <= Cache)
-								++first;
-							Array[last] = Array[first];
-						}
-						Cache.ReadCache(Array[first]);
-						SortRaw(Array, Low, first - 1, Cache);
-						SortRaw(Array, first + 1, High, Cache);
-					}
-					template<class U, class Functor>
-					static void SortRaw(U*Array, index_t Low, index_t High, SortCache<U>&Cache, Functor Comparator) {
-						if (Low >= High)
-							return;
-						atomic_type first = Low;
-						atomic_type last = High;
-						Cache.WriteCache(Array[first]);
-						while (first < last)
-						{
-							while (first < last&&Comparator(Array[last], Cache) >= 0)
-								--last;
-							Array[first] = Array[last];
-							while (first < last&&Comparator(Array[last], Cache) <= 0)
-								++first;
-							Array[last] = Array[first];
-						}
-						Cache.ReadCache(Array[first]);
-						SortRaw(Array, Low, first - 1, Cache);
-						SortRaw(Array, first + 1, High, Cache);
-					}
-				}
-				template<class U>
-				static void Sort(U*Array, index_t Low, index_t High) {
-					SortCache<U> cache;
-					Inner::SortRaw(Array, Low, High, cache);
-				}
-				template<class U, class Functor>
-				static void Sort(U*Array, index_t Low, index_t High, Functor Comparator) {
-					SortCache<U> cache;
-					Inner::SortRaw(Array, Low, High, cache, Comparator);
-				}
-			}
-
+			//内部实现
 			namespace Internal
 			{
-				template<class AnyT, class Compera>
-				static index_t BinarySearchInternal_Generic(const AnyT*Arr, size_t n, const AnyT&key, Compera comparator)
+				//数组迭代器接口实现
+				template<typename T>
+				class ArrayEnumerator :public Iteration::IEnumerator<T>
 				{
-					index_t mid, front = 0, back = n - 1;
-					while (front <= back)
-					{
-						mid = (front + back) / 2;
-						if (comparator(Arr[mid], key) == 0)
-							return mid;
-						if (comparator(Arr[mid], key) <= 0)
-							front = mid + 1;
-						else back = mid - 1;
+					typedef Iteration::IEnumerator<T> Base;
+					T*m_end = nullptr;
+				public:
+					ArrayEnumerator(ArrayEnumerator const&rhs) :m_end(rhs.m_end), Base(rhs.CurrentObject) {}
+					ArrayEnumerator(T*begin, T*end) : m_end(end), Base(begin) {}
+					virtual Iteration::EnumerationResult MoveNext() final {
+						this->CurrentObject++;
+						if (this->CurrentObject == m_end)
+							return Iteration::EnumerationResult::EOE;
+						return Iteration::EnumerationResult::Successful;
 					}
-					return -1;
-				}
-				template<class AnyT>
-				static index_t BinarySearchInternal(const AnyT*Arr, size_t len, const AnyT&key)
-				{
-					index_t mid, front = 0, back = n - 1;
-					while (front <= back)
-					{
-						mid = (front + back) / 2;
-						if (Arr[mid] == key)
-							return mid;
-						if (Arr[mid] < key)
-							front = mid + 1;
-						else back = mid - 1;
+					virtual ArrayEnumerator& operator=(IEnumerator<T>const&rhs)final {
+						this->m_end = static_cast<ArrayEnumerator const&>(rhs).m_end;
+						this->CurrentObject = static_cast<ArrayEnumerator const&>(rhs).CurrentObject;
+						return *this;
 					}
-					return -1;
-				}
-
-				template<class AnyT>
-				static index_t IndexOf(AnyT const*Arr, size_t length, index_t start_index, index_t end_index, AnyT const&key) {
-					if (!Arr)
-						return -1;
-					if (end_index < start_index)
-						return -1;
-					if (start_index < 0 || end_index >= length)
-						return -1;
-					for (index_t i = start_index; i <= end_index; ++i) {
-						if (Arr[i] == key)
-							return i;
+					virtual void* ClonePtr()const final {
+						return new ArrayEnumerator(*this);
 					}
-					return -1;
-				}
-				template<class AnyT, class BinaryCompera>
-				static index_t IndexOf(AnyT const*Arr, size_t length, index_t start_index, index_t end_index, AnyT const&key, BinaryCompera comparator) {
-					if (!Arr)
-						return -1;
-					if (end_index < start_index)
-						return -1;
-					if (start_index < 0 || end_index >= length)
-						return -1;
-					for (index_t i = start_index; i <= end_index; ++i) {
-						if (comparator(Arr[i], key) == true)
-							return i;
-					}
-					return -1;
-				}
-				template<class AnyT>
-				static index_t LastIndexOf(AnyT const*Arr, size_t length, index_t start_index, index_t end_index, AnyT const&key) {
-					if (!Arr)
-						return -1;
-					if (end_index < start_index)
-						return -1;
-					if (start_index < 0 || end_index >= length)
-						return -1;
-					for (index_t i = end_index; i >= start_index; --i) {
-						if (Arr[i] == key)
-							return i;
-					}
-					return -1;
-				}
-				template<class AnyT, class BinaryCompera>
-				static index_t LastIndexOf(AnyT const*Arr, size_t length, index_t start_index, index_t end_index, AnyT const&key, BinaryCompera comparator) {
-					if (!Arr)
-						return -1;
-					if (end_index < start_index)
-						return -1;
-					if (start_index < 0 || end_index >= length)
-						return -1;
-					for (index_t i = end_index; i >= start_index; --i) {
-						if (comparator(Arr[i], key) == true)
-							return i;
-					}
-					return -1;
-				}
-				template<class AnyT, class Fx>
-				static void IndexOfAll(AnyT const*Arr, size_t length, index_t start_index, index_t end_index, AnyT const&key, Fx func) {
-					if (!Arr)
-						return;
-					if (start_index < 0 || end_index >= length || end_index < start_index)
-						return;
-					index_t index = start_index - 1;
-					for (;;) {
-						index = Internal::IndexOf(Arr, length, index + 1, end_index, key);
-						if (index == -1)
-							break;
-						else
-							func(Arr[index]);
-					}
-				}
-				template<class AnyT, class Fx, class BinaryCompera>
-				static void IndexOfAll(AnyT const*Arr, size_t length, index_t start_index, index_t end_index, AnyT const&key, BinaryCompera comparator, Fx func) {
-					if (!Arr)
-						return;
-					if (start_index < 0 || end_index >= length || end_index < start_index)
-						return;
-					index_t index = start_index - 1;
-					for (;;) {
-						index = Internal::IndexOf(Arr, length, index + 1, end_index, key, comparator);
-						if (index == -1)
-							break;
-						else
-							func(Arr[index]);
-					}
-				}
-
-				template<class AnyT, class Fx>
-				static void LastIndexOfAll(AnyT const*Arr, size_t length, index_t start_index, index_t end_index, AnyT const&key, Fx func) {
-					if (!Arr)
-						return;
-					if (start_index < 0 || end_index >= length || end_index < start_index)
-						return;
-					index_t index = end_index + 1;
-					for (;;) {
-						index = Internal::LastIndexOf(Arr, length, 0, index - 1, key);
-						if (index == -1)
-							break;
-						else
-							func(Arr[index]);
-					}
-				}
-				template<class AnyT, class Fx, class BinaryCompera>
-				static void LastIndexOfAll(AnyT const*Arr, size_t length, index_t start_index, index_t end_index, AnyT const&key, BinaryCompera comparator, Fx func) {
-					if (!Arr)
-						return;
-					if (start_index < 0 || end_index >= length || end_index < start_index)
-						return;
-					index_t index = end_index + 1;
-					for (;;) {
-						index = Internal::LastIndexOf(Arr, length, 0, index - 1, key, comparator);
-						if (index == -1)
-							break;
-						else
-							func(Arr[index]);
-					}
-				}
-				template<class IterT, class Fx>
-				void Foreach(IterT begin, IterT end, Fx func) {
-					for (IterT iter = begin; iter != end; ++iter) {
-						func(*iter);
-					}
-				}
+				};
 			}
-
-			//数组迭代器接口实现
-			template<typename T, typename TT>
-			class Iterator<Array<TT>, T>
-			{
-				T*pObj;
-			public:
-				inline explicit Iterator(T*p) :pObj(p) {}
-				inline Iterator&operator++() {
-					++pObj;
-					return *this;
-				}
-				inline Iterator&operator--() {
-					--pObj;
-					return *this;
-				}
-				inline Iterator&operator++(int t) {
-					pObj += t;
-					return *this;
-				}
-				inline Iterator&operator--(int t) {
-					pObj -= t;
-					return *this;
-				}
-				inline T*operator->() {
-					return pObj;
-				}
-				inline T const*operator->()const {
-					return pObj;
-				}
-				friend inline bool operator==(Iterator const& it1, Iterator const& it2) {
-					return it1.pObj == it2.pObj;
-				}
-				friend inline bool operator!=(Iterator const& it1, Iterator const& it2) {
-					return it1.pObj != it2.pObj;
-				}
-				friend inline Iterator operator+(Iterator const& it, int t) {
-					return Iterator(it.pObj + t);
-				}
-				friend inline Iterator operator-(Iterator const&it, int t) {
-					return Iterator(it.pObj - t);
-				}
-				friend inline Iterator operator+(int t, Iterator const& it) {
-					return Iterator(t + it.pObj);
-				}
-				inline T& CurrentReference() {
-					return *pObj;
-				}
-				inline T const& CurrentReference()const {
-					return *pObj;
-				}
-				inline operator T*() {
-					return pObj;
-				}
-				inline operator T const*()const {
-					return pObj;
-				}
-			};
-
-			//集合接口
-			template<class T>
-			class ICollection
-			{
-			public:
-				virtual size_t Count()const = 0;
-				virtual void Add(T const&) = 0;
-				virtual void RemoveAt(index_t) = 0;
-				virtual void Clear() = 0;
-				virtual T const&operator[](index_t)const = 0;
-				virtual T&operator[](index_t) = 0;
-			};
-
-			//只读集合接口
-			template<class T>
-			class IReadOnlyCollection
-			{
-			public:
-				virtual size_t Count()const = 0;
-				virtual T const&operator[](index_t)const = 0;
-				virtual T&operator[](index_t) = 0;
-			};
 
 			//定长数组
 			template<class T>
-			class array sealed:public IReadOnlyCollection<T>
+			class array sealed 
 			{
 				T*m_data = nullptr;
 				size_t m_count = 0;
@@ -353,8 +53,8 @@ namespace HL
 					if (!Template::IsValueType<T>::R)
 						Memory::Construct(this->m_data, rhs.m_data, m_count);
 				}
-				array(size_t capcity):m_count(capcity){
-					m_data = (T*)Memory::Allocator::AllocBlank(capcity*sizeof(T));
+				array(size_t capcity) : m_count(capcity) {
+					m_data = (T*)Memory::Allocator::AllocBlank(capcity * sizeof(T));
 				}
 				array(T const*ptr, index_t index, size_t count) {
 					m_data = (T*)Memory::Allocator::AllocBlank(count * sizeof(T));
@@ -375,7 +75,7 @@ namespace HL
 					lhs.m_data = nullptr;
 					return *this;
 				}
-				array SubArray(index_t index,size_t count)const {
+				array SubArray(index_t index, size_t count)const {
 					if (index >= 0 && count > 0) {
 						if (index + count < m_count) {
 							return array(this->m_data, index, count);
@@ -392,20 +92,26 @@ namespace HL
 						this->m_count = count;
 					}
 				}
-				virtual inline size_t Count()const {
+				inline size_t Count()const {
 					return m_count;
 				}
-				virtual inline T const&operator[](index_t index)const {
+				inline T const&operator[](index_t index)const {
 					return m_data[index];
 				}
-				virtual inline T&operator[](index_t index) {
+				inline T&operator[](index_t index) {
 					return m_data[index];
 				}
-				T const& GetAt(index_t index)const {
+				inline T const& GetAt(index_t index)const {
 					return m_data[index];
 				}
-				T & GetAt(index_t index) {
+				inline T & GetAt(index_t index) {
 					return m_data[index];
+				}
+				inline T* GetData() {
+					return this->m_data;
+				}
+				inline T const* GetData()const {
+					return this->m_data;
 				}
 				void Clear() {
 					if (m_data != nullptr) {
@@ -422,7 +128,7 @@ namespace HL
 
 			//数组
 			template<typename T>
-			class Array sealed:public ICollection<T>,public IReadOnlyCollection<T>,public Interface::ICloneable<Array<T>>
+			class Array sealed :public Interface::ICloneable, public Linq::LinqBase<T>
 			{
 			private:
 				void InsertInternal(T const*source, index_t index, size_t count) {
@@ -437,16 +143,17 @@ namespace HL
 				}
 			public:
 				typedef Memory::MemoryManager<T> ContainerT;
+				typedef Internal::ArrayEnumerator<T> IterT;
 			private:
 				ContainerT data;
 			public:
-				Array():data(0){}
+				Array() :data(0) {}
 				Array(Array const&rhs) :data(rhs.data) {}
 				Array(Array &&lhs) :data(static_cast<ContainerT&&>(lhs.data)) {}
 				Array(ContainerT const&rhs) :data(rhs) {}
 				Array(ContainerT &&lhs) :data(static_cast<ContainerT&&>(lhs)) {}
 				Array(std::initializer_list<T>const&init_list) {
-					Internal::Foreach(init_list.begin(),init_list.end(), [this](T const&object) {
+					Algorithm::Foreach(init_list.begin(), init_list.end(), [this](T const&object) {
 						this->Add(object);
 					});
 				}
@@ -479,7 +186,7 @@ namespace HL
 				}
 				//向数组中添加另一数组全部元素
 				void Add(T const*array_ptr, size_t length) {
-					if(array_ptr)
+					if (array_ptr)
 						this->data.Append(array_ptr, length);
 				}
 				//向数组中添加另一数组从index开始count个元素
@@ -527,6 +234,24 @@ namespace HL
 					}
 					return Array(0);
 				}
+				//排序
+				template<class Functor>
+				void Sort(Functor const&Compare)
+				{
+					Algorithm::QuickSort(this->data.GetMemoryBlock(), 0, this->Count() - 1, Compare);
+				}
+				//排序
+				void Sort(Linq::SortOrder Order = Linq::SortOrder::Ascending)
+				{
+					if (Order == Linq::SortOrder::Ascending)
+						Algorithm::QuickSort(this->data.GetMemoryBlock(), 0, this->Count() - 1, [](T&l, T&r) {
+						return l >= r ? 1 : -1;
+					});
+					else
+						Algorithm::QuickSort(this->data.GetMemoryBlock(), 0, this->Count() - 1, [](T&l, T&r) {
+						return l >= r ? -1 : 1;
+					});
+				}
 				//移除最后一个元素
 				void Pop() {
 					if (this->Count() != 0)
@@ -546,102 +271,93 @@ namespace HL
 						if (index >= 0 && index + count < this->Count())
 							this->data.CopyTo(memory_block, index, count);
 				}
-				//数组排序
-				void Sort() {
-					Sort::Sort(this->data.GetMemoryBlock(), 0, this->Count() - 1);
-				}
-				//数组排序
-				template<class Functor>
-				void Sort(Functor Comparator) {
-					Sort::Sort(this->data.GetMemoryBlock(), 0, this->Count() - 1, Comparator);
-				}
 				//二分搜索法
 				index_t BinarySearch(T const&key) {
-					return Internal::BinarySearchInternal(this->data.GetMemoryBlock(), this->Count(), key);
+					return Algorithm::BinarySearch(this->data.GetMemoryBlock(), this->Count(), key);
 				}
 				//二分搜索法
 				template<class Functor>
 				index_t BinarySearch(T const&key, Functor comparator) {
-					return Internal::BinarySearchInternal_Generic(this->data.GetMemoryBlock(), this->Count(), key, comparator);
+					return Algorithm::BinarySearchInternal_Generic(this->data.GetMemoryBlock(), this->Count(), key, comparator);
 				}
 				//匹配对象
 				index_t IndexOf(T const&key) {
-					return Internal::IndexOf(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key);
+					return Algorithm::IndexOf(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key);
 				}
 				//匹配对象
 				index_t IndexOf(T const&key, index_t start_index) {
-					return Internal::IndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key);
+					return Algorithm::IndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key);
 				}
 				//匹配对象
 				index_t IndexOf(T const&key, index_t start_index, index_t end_index) {
-					return Internal::IndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key);
+					return Algorithm::IndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key);
 				}
 				//匹配对象(使用比较器)
 				template<class BinaryCompera>
 				index_t IndexOfWithComparator(T const&key, BinaryCompera comparator) {
-					return Internal::IndexOf(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, comparator);
+					return Algorithm::IndexOf(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, comparator);
 				}
 				//匹配对象(使用比较器)
 				template<class BinaryCompera>
 				index_t IndexOfWithComparator(T const&key, index_t start_index, BinaryCompera comparator) {
-					return Internal::IndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, comparator);
+					return Algorithm::IndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, comparator);
 				}
 				//匹配对象(使用比较器)
 				template<class BinaryCompera>
-				index_t IndexOfWithComparator(T const&key, index_t start_index, index_t end_index,BinaryCompera comparator) {
-					return Internal::IndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, comparator);
+				index_t IndexOfWithComparator(T const&key, index_t start_index, index_t end_index, BinaryCompera comparator) {
+					return Algorithm::IndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, comparator);
 				}
 				//匹配所有对象
 				template<class Fx>
-				void IndexOfAll(T const&key,Fx func) {
-					Internal::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, func);
+				void IndexOfAll(T const&key, Fx func) {
+					Algorithm::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, func);
 				}
 				//匹配所有对象
 				template<class Fx>
 				void IndexOfAll(T const&key, index_t start_index, Fx func) {
-					Internal::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, func);
+					Algorithm::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, func);
 				}
 				//匹配所有对象
 				template<class Fx>
 				void IndexOfAll(T const&key, index_t start_index, index_t end_index, Fx func) {
-					Internal::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, func);
+					Algorithm::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, func);
 				}
 				//匹配所有对象(使用比较器)
-				template<class BinaryCompera,class Fx>
+				template<class BinaryCompera, class Fx>
 				void IndexOfAllWithComparator(T const&key, BinaryCompera comparator, Fx func) {
-					Internal::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, comparator, func);
+					Algorithm::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, comparator, func);
 				}
 				//匹配所有对象(使用比较器)
 				template<class BinaryCompera, class Fx>
 				void IndexOfAllWithComparator(T const&key, index_t start_index, BinaryCompera comparator, Fx func) {
-					Internal::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, comparator, func);
+					Algorithm::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, comparator, func);
 				}
 				//匹配所有对象(使用比较器)
 				template<class BinaryCompera, class Fx>
 				void IndexOfAllWithComparator(T const&key, index_t start_index, index_t end_index, BinaryCompera comparator, Fx func) {
-					Internal::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, comparator, func);
+					Algorithm::IndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, comparator, func);
 				}
 				//从最后开始匹配对象
 				index_t LastIndexOf(T const&key) {
-					return Internal::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key);
+					return Algorithm::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key);
 				}
 				//从最后开始匹配对象
 				index_t LastIndexOf(T const&key, index_t start_index) {
-					return Internal::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key);
+					return Algorithm::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key);
 				}
 				//从最后开始匹配对象
 				index_t LastIndexOf(T const&key, index_t start_index, index_t end_index) {
-					return Internal::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key);
+					return Algorithm::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key);
 				}
 				//从最后开始匹配对象(使用比较器)
 				template<class BinaryCompera>
 				index_t LastIndexOfWithComparator(T const&key, BinaryCompera comparator) {
-					return Internal::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, comparator);
+					return Algorithm::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, comparator);
 				}
 				//从最后开始匹配对象(使用比较器)
 				template<class BinaryCompera>
 				index_t LastIndexOfWithComparator(T const&key, index_t start_index, BinaryCompera comparator) {
-					return Internal::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, comparator);
+					return Algorithm::LastIndexOf(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, comparator);
 				}
 				//从最后开始匹配对象(使用比较器)
 				template<class BinaryCompera>
@@ -651,32 +367,32 @@ namespace HL
 				//从最后开始匹配所有对象
 				template<class Fx>
 				void LastIndexOfAll(T const&key, Fx func) {
-					Internal::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, func);
+					Algorithm::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, func);
 				}
 				//从最后开始匹配所有对象
 				template<class Fx>
-				void LastIndexOfAll(T const&key,index_t start_index, Fx func) {
-					Internal::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, func);
+				void LastIndexOfAll(T const&key, index_t start_index, Fx func) {
+					Algorithm::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, func);
 				}
 				//从最后开始匹配所有对象
 				template<class Fx>
 				void LastIndexOfAll(T const&key, index_t start_index, index_t end_index, Fx func) {
-					Internal::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, func);
+					Algorithm::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, func);
 				}
 				//从最后开始匹配所有对象(使用比较器)
 				template<class BinaryCompera, class Fx>
 				void LastIndexOfAllWithComparator(T const&key, BinaryCompera comparator, Fx func) {
-					Internal::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, func);
+					Algorithm::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), 0, this->Count() - 1, key, func);
 				}
 				//从最后开始匹配所有对象(使用比较器)
 				template<class BinaryCompera, class Fx>
 				void LastIndexOfAllWithComparator(T const&key, index_t start_index, BinaryCompera comparator, Fx func) {
-					Internal::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, func);
+					Algorithm::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, this->Count() - 1, key, func);
 				}
 				//从最后开始匹配所有对象(使用比较器)
 				template<class BinaryCompera, class Fx>
 				void LastIndexOfAllWithComparator(T const&key, index_t start_index, index_t end_index, BinaryCompera comparator, Fx func) {
-					Internal::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, func);
+					Algorithm::LastIndexOfAll(this->data.GetMemoryBlock(), this->Count(), start_index, end_index, key, func);
 				}
 				//数组是否为空
 				bool IsEmpty()const {
@@ -686,7 +402,6 @@ namespace HL
 				virtual size_t Count()const {
 					return this->data.GetUsedSize();
 				}
-				
 				//获得最大容量
 				size_t Capacity()const {
 					return this->data.GetMaxSize();
@@ -741,21 +456,12 @@ namespace HL
 					this->Clear();
 				}
 
-				public://其他特性
-#if	_FOR_LOOP_SYNTACTIC_SUGAR //for语法糖支持
-					inline Iterator<Array<T>, T> begin() {
-						return Iterator<Array<T>, T>(this->data.GetMemoryBlock());
-					}
-					inline Iterator<Array<T>, const T>begin()const {
-						return Iterator<Array<T>, const T>(this->data.GetMemoryBlock());
-					}
-					inline Iterator<Array<T>, T> end() {
-						return Iterator<Array<T>, T>(this->data.GetMemoryBlock() + this->Count());
-					}
-					inline Iterator<Array<T>, const T>end()const {
-						return Iterator<Array<T>, const T>(this->data.GetMemoryBlock() + this->Count());
-					}
-#endif
+			public:
+				//其他特性
+				virtual uptr<Iteration::IEnumerator<T>> GetEnumerator()const final
+				{
+					return newptr<IterT>(const_cast<T*>(this->data.GetMemoryBlock()), const_cast<T*>(this->data.GetMemoryBlock() + this->data.GetUsedSize()));
+				}
 				//循环迭代
 				template<class Fx>
 				void Foreach(Fx func) {
@@ -767,38 +473,31 @@ namespace HL
 					ret.data.ManageFrom(array_ptr, count, total);
 					return ret;
 				}
-				virtual Array Clone()const {
-					return Array(*this);
+				virtual void* ClonePtr()const final {
+					return new Array(*this);
 				}
 			};
 
-
+			///////////////////////uptr接口声明
 			template<class T>
 			struct Interface::IndexerSupportInterface<Array<T>>
 			{
-				typedef size_t IndexType;
+				typedef index_t IndexType;
 				typedef T ReturnType;
 			};
 
 			template<class T>
-			struct Interface::IndexerSupportInterface<ICollection<T>>
+			struct Interface::IndexerSupportInterface<array<T>>
 			{
-				typedef size_t IndexType;
+				typedef index_t IndexType;
 				typedef T ReturnType;
 			};
 
 			template<class T>
-			struct Interface::IndexerSupportInterface<IReadOnlyCollection<T>>
+			struct Interface::EnumerableSupportInterface<Array<T>>
 			{
-				typedef size_t IndexType;
-				typedef T ReturnType;
-			};
-
-			template<class T>
-			struct Interface::IteratorSupportInterface<Array<T>>
-			{
-				typedef Generic::Iterator<Generic::Array<T>, T> IteratorType;
-				typedef Generic::Iterator<Generic::Array<T>, const T> ConstIteratorType;
+				typedef uptr<Iteration::IEnumerator<T>> IteratorType;
+				typedef uptr<Iteration::IEnumerator<T const>> ConstIteratorType;
 			};
 		}
 	}
