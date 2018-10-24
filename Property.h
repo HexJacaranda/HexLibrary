@@ -11,6 +11,7 @@ namespace HL
 			public:
 				virtual operator T const&()const = 0;
 				virtual void operator=(T const&)const = 0;
+				virtual ~interface_property(){}
 			};
 
 			template<class T>
@@ -33,7 +34,6 @@ namespace HL
 				}
 				property&operator=(property const&) = delete;
 				property&operator=(property&&lhs) {
-					this->~property();
 					this->interface_ptr = lhs.interface_ptr;
 					lhs.interface_ptr = nullptr;
 					return *this;
@@ -47,7 +47,7 @@ namespace HL
 				inline operator T&() {
 					return const_cast<T&>(interface_ptr->operator const T &());
 				}
-				~property() {
+				virtual ~property() {
 				}
 			};
 

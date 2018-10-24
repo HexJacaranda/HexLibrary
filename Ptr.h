@@ -114,8 +114,8 @@ namespace HL
 					virtual System::UPointer::uptr_resource* clone()const final {
 						T*object_ptr = (T*)this->object;
 						unique_resource<T>*ret = new unique_resource<T>();
-						ret->object = Interface::ICloneable<T>::GetClonePtr(*object_ptr);
-						return 
+						ret->object = Interface::ICloneable::GetClonePtr(*object_ptr);
+						return ret;
 					}
 				};
 				

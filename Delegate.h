@@ -131,6 +131,7 @@ namespace HL
 						else
 							return nullptr;
 					}
+					virtual ~IDelegate() {}
 				};
 				template<class Fx, class TT, class R, class...Args>
 				class IDelegate<R(__stdcall TT::*)(Args...), Fx> :public DelegateBase
@@ -162,6 +163,7 @@ namespace HL
 						else
 							return nullptr;
 					}
+					virtual ~IDelegate() {}
 				};
 
 				//²ÎÊý·â×°

@@ -86,6 +86,8 @@ namespace HL
 				virtual uptr_resource* update(uptr_resource*, Reference::IntPtr) = 0;
 				//查询资源是否有效
 				virtual bool is_invalid(uptr_resource*)const = 0;
+
+				virtual ~uptr_resource_keeper() {}
 			};
 
 			//智能指针统一化类型

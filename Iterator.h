@@ -36,6 +36,7 @@ namespace HL
 				}
 				virtual IEnumerator<T>& operator=(IEnumerator<T>const&) = 0;
 				virtual void* ClonePtr()const = 0;
+				virtual ~IEnumerator(){}
 			};
 			//µü´úÆ÷
 			template<class T>
@@ -88,6 +89,7 @@ namespace HL
 					static uptr<Iterator<T>> end = Reference::newptr<Iterator<T>>();
 					return end;
 				}
+				virtual ~Iterator() {}
 			};
 
 			template<class T>
@@ -103,6 +105,7 @@ namespace HL
 					return Iterator<T>::End();
 				}
 #endif
+				virtual ~IEnumerable() {}
 			};
 
 			template<class T>

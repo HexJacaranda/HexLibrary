@@ -213,7 +213,7 @@ namespace HL
 							return static_cast<T&&>(Object);
 						}
 					}
-					Exception::Throw<Exception::UnHandledException>();
+					HL::Exception::Throw<HL::Exception::UnHandledException>();
 				}
 				void Enqueue(T const&Object,PriorityIndex Priority) {
 					if (this->m_count == this->m_items.Count())
@@ -236,7 +236,6 @@ namespace HL
 						ptr = (Item*)Memory::Allocator::Alloc(sizeof(Item));
 					ptr->Set(Object);
 					ptr->Index = Priority;
-					
 				}
 				size_t Count()const {
 					return m_count;

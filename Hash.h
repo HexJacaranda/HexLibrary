@@ -55,6 +55,7 @@ namespace HL
 			public:
 				//获取对象HashCode
 				virtual size_t GetHashCode()const = 0;
+				virtual ~ISupportHash() {}
 			};
 		}
 	}

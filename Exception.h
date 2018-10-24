@@ -21,7 +21,7 @@ namespace HL
 		template<class T>
 		class ExceptionHandle;
 
-#define EXCEPTIONCLASS(Name,Msg) class Name:public HL::Exception::IException{public: Name():IException(L#Msg){} }
+#define EXCEPTIONCLASS(Name,Msg) class Name:public HL::Exception::IException{public: Name():IException(L#Msg){} virtual ~Name(){} }
 
 		EXCEPTIONCLASS(InvalidInvokeException, "调用失败");
 		EXCEPTIONCLASS(NullReferenceException, "无效引用");

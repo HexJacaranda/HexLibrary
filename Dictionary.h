@@ -17,6 +17,7 @@ namespace HL
 				virtual void Clear() = 0;
 				virtual TValue const&operator[](TKey const&)const = 0;
 				virtual TValue &operator[](TKey const&) = 0;
+				virtual ~IDictionary() {}
 			};
 
 			namespace Inner
@@ -45,7 +46,8 @@ namespace HL
 						{
 							if (m_primes[i] >= min) return m_primes[i];
 						}
-						for (int i = (min | 1); i < Values::MaxValues::Int32; i += 2)
+						//ToDo
+						for (int i = (min | 1); i < 2147483647; i += 2)
 						{
 							if (IsPrime(i) && ((i - 1) % 101 != 0))
 								return i;
@@ -68,18 +70,44 @@ namespace HL
 					atomic_type Next = 0;
 					TKey*Key = nullptr;
 					TValue*Value = nullptr;
-					EntryPair(EntryPair const&) = default;
+					EntryPair(EntryPair const&rhs)
+					{
+						this->Key = new TKey(*rhs.Key);
+						this->Value = new TValue(*rhs.Value);
+						this->Hash = rhs.Hash;
+						this->Next = rhs.Next;
+					}
+					EntryPair(EntryPair &&lhs)
+					{
+						this->Key = lhs.Key;
+						this->Value = lhs.Value;
+						this->Hash = lhs.Hash;
+						this->Next = lhs.Next;
+						lhs.Key = nullptr;
+						lhs.Value = nullptr;
+					}
 					EntryPair() {
 						Hash = -1;
 					}
-					EntryPair<TKey, TValue> Clone() {
-						EntryPair<TKey, TValue> ret;
-						if (Key != nullptr)
-							ret.Key = new TKey(this->Key);
-						if (Value != nullptr)
-							ret.Value = new TValue(this->Value);
-						ret.Hash = this->Hash;
-						return ret;
+					EntryPair&operator=(EntryPair const&rhs)
+					{
+						this->Clear();
+						this->Key = new TKey(*rhs.Key);
+						this->Value = new TValue(*rhs.Value);
+						this->Hash = rhs.Hash;
+						this->Next = rhs.Next;
+						return *this;
+					}
+					EntryPair&operator=(EntryPair&&lhs)
+					{
+						this->Clear();
+						this->Key = lhs.Key;
+						this->Value = lhs.Value;
+						this->Hash = lhs.Hash;
+						this->Next = lhs.Next;
+						lhs.Key = nullptr;
+						lhs.Value = nullptr;
+						return *this;
 					}
 					void Clear() {
 						if (Key != nullptr)
@@ -108,11 +136,13 @@ namespace HL
 				Entry * m_iter;
 				Entry * m_end;
 			public:
-				DictionaryEnumerator(Entry * begin, Entry * end) :m_iter(begin), m_end(end), Base(&this->m_current) {}
-				DictionaryEnumerator(DictionaryEnumerator const&rhs) :m_current(rhs.m_current), m_iter(rhs.m_iter), m_end(rhs.m_end), Base(rhs.CurrentObject) {}
+				DictionaryEnumerator(Entry * begin, Entry * end) :m_iter(begin), m_end(end), Base(&this->m_current) {
+					this->MoveNext();
+				}
+				DictionaryEnumerator(DictionaryEnumerator const&rhs) :m_current(rhs.m_current), m_iter(rhs.m_iter), m_end(rhs.m_end), Base(&this->m_current) {}
 				virtual Iteration::EnumerationResult MoveNext() final {
 					while (m_iter != m_end)
-					{
+					{	
 						if (m_iter->Hash > 0)
 						{
 							m_current.Set(*m_iter->Key, *m_iter->Value);
@@ -136,7 +166,7 @@ namespace HL
 
 			//×ÖµäÈÝÆ÷
 			template<class TKey, class TValue>
-			class Dictionary sealed :public IDictionary<TKey, TValue>, public System::Interface::ICloneable
+			class Dictionary sealed :public IDictionary<TKey, TValue>, public System::Interface::ICloneable,public Linq::LinqBase<KeyValuePair<TKey, TValue>>
 			{
 				template<class AnyT>
 				static atomic_type InnerGetHashCode(AnyT const&key) {
@@ -246,31 +276,26 @@ namespace HL
 				}
 
 				Dictionary(Dictionary const&rhs) {
-					this->m_buckets = System::Generic::array<atomic_type>(rhs.m_buckets.Count());
-					for (index_t i = 0; i < this->m_buckets.Count(); ++i)
-						this->m_buckets[i] = rhs.m_buckets[i];
-					this->m_count = rhs.m_count;
+					this->m_buckets = rhs.m_buckets;
 					this->m_entries = rhs.m_entries;
+					this->m_count = rhs.m_count;
 					this->m_freelist = rhs.m_freelist;
 					this->m_freecount = rhs.m_freecount;
 				}
 
 				Dictionary(Dictionary &&lhs) {
-					this->m_buckets = static_cast<System::Generic::array<Entry>&&>(lhs.m_buckets);
-					this->m_entries = static_cast<System::Generic::array<atomic_type&&>>(lhs.m_entries);
+					this->m_buckets = Forward(lhs.m_buckets);
+					this->m_entries = Forward(lhs.m_entries);
 					this->m_count = lhs.m_count;
-					this->m_entries = lhs.m_entries;
 					this->m_freelist = lhs.m_freelist;
 					this->m_freecount = lhs.m_freecount;
 				}
 
 				Dictionary&operator=(Dictionary const&rhs) {
 					this->Clear();
-					this->m_buckets = System::Generic::array<Entry>(rhs.m_buckets.m_count);
-					for (index_t i = 0; i < this->m_buckets.Count(); ++i)
-						this->m_buckets[i] = rhs.m_buckets[i].Clone();
-					this->m_count = rhs.m_count;
+					this->m_buckets = rhs.m_buckets;
 					this->m_entries = rhs.m_entries;
+					this->m_count = rhs.m_count;
 					this->m_freelist = rhs.m_freelist;
 					this->m_freecount = rhs.m_freecount;
 					return *this;
@@ -278,10 +303,9 @@ namespace HL
 
 				Dictionary&operator=(Dictionary &&lhs) {
 					this->Clear();
-					this->m_buckets = static_cast<System::Generic::array<Entry>&&>(lhs.m_buckets);
-					this->m_entries = static_cast<System::Generic::array<atomic_type&&>>(lhs.m_entries);
+					this->m_buckets = Forward(lhs.m_buckets);
+					this->m_entries = Forward(lhs.m_entries);
 					this->m_count = lhs.m_count;
-					this->m_entries = lhs.m_entries;
 					this->m_freelist = lhs.m_freelist;
 					this->m_freecount = lhs.m_freecount;
 					return *this;
@@ -360,7 +384,7 @@ namespace HL
 						);
 				}
 				//Îö¹¹
-				~Dictionary() {
+				virtual ~Dictionary() {
 					m_entries.Clear();
 					m_buckets.Clear();
 				}
@@ -376,8 +400,8 @@ namespace HL
 		template<class TKey, class TValue>
 		struct Interface::EnumerableSupportInterface<Generic::Dictionary<TKey, TValue>>
 		{
-			typedef uptr<Iteration::IEnumerator<Generic::KeyValuePair<TKey const&, TValue&>>> IteratorType;
-			typedef uptr<Iteration::IEnumerator<Generic::KeyValuePair<TKey const&, TValue&>>> ConstIteratorType;
+			typedef uptr<Iteration::Iterator<Generic::KeyValuePair<TKey, TValue>>> IteratorType;
+			typedef uptr<Iteration::Iterator<Generic::KeyValuePair<TKey, TValue const>>> ConstIteratorType;
 		};
 	}
 }

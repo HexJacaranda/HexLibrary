@@ -23,7 +23,7 @@ namespace HL
 							return Iteration::EnumerationResult::EOE;
 						return Iteration::EnumerationResult::Successful;
 					}
-					virtual ArrayEnumerator& operator=(IEnumerator<T>const&rhs)final {
+					virtual ArrayEnumerator& operator=(Iteration::IEnumerator<T>const&rhs)final {
 						this->m_end = static_cast<ArrayEnumerator const&>(rhs).m_end;
 						this->CurrentObject = static_cast<ArrayEnumerator const&>(rhs).CurrentObject;
 						return *this;
@@ -31,6 +31,7 @@ namespace HL
 					virtual void* ClonePtr()const final {
 						return new ArrayEnumerator(*this);
 					}
+					virtual ~ArrayEnumerator() {}
 				};
 			}
 
@@ -52,6 +53,8 @@ namespace HL
 					m_count = rhs.m_count;
 					if (!Template::IsValueType<T>::R)
 						Memory::Construct(this->m_data, rhs.m_data, m_count);
+					else
+						Memory::Allocator::MemoryCopy(rhs.m_data, this->m_data, 0, sizeof(T)*m_count);
 				}
 				array(size_t capcity) : m_count(capcity) {
 					m_data = (T*)Memory::Allocator::AllocBlank(capcity * sizeof(T));
@@ -62,10 +65,12 @@ namespace HL
 				}
 				array&operator=(array const&rhs) {
 					this->Clear();
-					m_data = (T*)Memory::Allocator::AllocBlank(rhs.m_count);
+					m_data = (T*)Memory::Allocator::AllocBlank(rhs.m_count * sizeof(T));
 					m_count = rhs.m_count;
 					if (!Template::IsValueType<T>::R)
 						Memory::Construct(this->m_data, rhs.m_data, m_count);
+					else
+						Memory::Allocator::MemoryCopy(rhs.m_data, this->m_data, 0, sizeof(T)*m_count);
 					return *this;
 				}
 				array&operator=(array&&lhs) {
@@ -452,7 +457,7 @@ namespace HL
 					return *this;
 				}
 
-				~Array() {
+				virtual ~Array() {
 					this->Clear();
 				}
 
@@ -496,8 +501,8 @@ namespace HL
 			template<class T>
 			struct Interface::EnumerableSupportInterface<Array<T>>
 			{
-				typedef uptr<Iteration::IEnumerator<T>> IteratorType;
-				typedef uptr<Iteration::IEnumerator<T const>> ConstIteratorType;
+				typedef uptr<Iteration::Iterator<T>> IteratorType;
+				typedef uptr<Iteration::Iterator<T const>> ConstIteratorType;
 			};
 		}
 	}

@@ -144,7 +144,7 @@ namespace HL
 				internal_ctor(count, rank);
 			}
 			template<class T>
-			inline MemoryManager<T>::MemoryManager(T const *source, size_t count, size_t rank = 2)
+			inline MemoryManager<T>::MemoryManager(T const *source, size_t count, size_t rank)
 			{
 				internal_ctor(source, count, rank);
 			}
@@ -314,6 +314,7 @@ namespace HL
 				this->m_data = source;
 				this->m_used = count;
 				this->m_max = total;
+				this->m_rank = 1;
 			}
 
 			template<class T>

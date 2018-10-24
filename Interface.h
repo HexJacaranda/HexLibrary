@@ -94,6 +94,7 @@ namespace HL
 				};
 			public:
 				virtual void* ClonePtr()const = 0;
+				virtual ~ICloneable() {}
 				//获得复制实例(由new分配在堆上的对象)
 				template<class T>
 				static T* GetClonePtr(T const&target) {

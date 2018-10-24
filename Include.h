@@ -5,6 +5,7 @@
 #pragma warning(disable:4552)
 #include <initializer_list>
 #define WIN32_LEAN_AND_MEAN  //排除极少用的东西
+#define _ENABLE_ATOMIC_ALIGNMENT_FIX  //atmoic库要求
 #include <windows.h>
 
 #include "Define.h"
@@ -15,8 +16,6 @@
 #include "Covariance.h"
 #include "Interface.h"
 #include "IntPtr.h"
-#include "Cast.h"
-#include "Value.h"
 #include "Allocator.h"
 #include "Hash.h"
 #include "Tuple.h"
@@ -31,9 +30,13 @@
 #include "Dictionary.h"
 #include "GarbageCollector.h"
 #include "Delegate.h"
+#include "Concurrency.h"
 #include "String.h"
 #include "Thread.h"
+#include "File.h"
 #include "Console.h"
+#include "Meta.h"
 #include "Property.h"
 #include "JSON.h"
+#include "Regex.h"
 #include "Dynamic.h"

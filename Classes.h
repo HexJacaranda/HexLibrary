@@ -117,6 +117,17 @@ namespace HL
 			typedef UPointer::uptr<JsonArray> UJsonArray;
 			typedef UPointer::uptr<JsonValue> UJsonValue;
 		}
+		namespace Concurrency
+		{
+			template<class T>
+			class ConcurrentNode;
+			template<class T>
+			class ConcurrentNodeWrapper;
+			template<class T>
+			class ConcurrentStack;
+			template<class T>
+			class ConcurrentQueue;
+		}
 	}
 	namespace Cast
 	{
@@ -127,4 +138,5 @@ namespace HL
 		template<class T>
 		class ExceptionHandle;
 	}
+
 }

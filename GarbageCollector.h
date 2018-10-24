@@ -10,7 +10,8 @@ namespace HL
 			class GCObjectBase
 			{
 			public:
-				size_t reachable = false;
+				//可到达状态,0为不可到达,1为可到达
+				size_t reachable = 0x1;
 				virtual ~GCObjectBase(){}
 			};
 			template<class T>
@@ -47,7 +48,7 @@ namespace HL
 		{
 			void* scan_thread = nullptr;
 			System::Threading::Volatile lock;
-			size_t state = 0x01;
+			size_t state = 0x1;
 			size_t duration = 10;
 			size_t scanindex = 0;
 			System::Threading::Mutex object_enter;
@@ -60,7 +61,7 @@ namespace HL
 
 			void ScanThread(bool once) 
 			{
-				while (state != 0x00)
+				while (state != 0x0)
 				{
 					Start:
 					if (!once)
@@ -82,7 +83,7 @@ namespace HL
 					}
 					else//有更改的话
 					{
-						state = 0x02;
+						state = 0x2;
 						scanindex = 0;
 						this->lock.TryLock();//检查是否有操作在进行
 						//上锁
@@ -95,7 +96,7 @@ namespace HL
 							{
 								if (handle_table[i]->is_on_reference)
 								{
-									handle_table[i]->reference_target->reachable = 0x01;
+									handle_table[i]->reference_target->reachable = 0x1;
 									shandles.Add(handle_table[i]);
 								}
 								else
@@ -106,9 +107,9 @@ namespace HL
 								handle_table.ShrinkToFit();//收缩空间
 							for (size_t i = 0; i < object_table.Count(); ++i)
 							{
-								if (object_table[i]->reachable == 0x01)
+								if (object_table[i]->reachable == 0x1)
 								{
-									object_table[i]->reachable = 0x00;
+									object_table[i]->reachable = 0x0;
 									sobjs.Add(object_table[i]);
 								}
 								else
@@ -215,7 +216,7 @@ namespace HL
 				virtual System::UPointer::uptr_resource* clone()const final{
 					InternalAdopt::managed_resource<T> * ptr = new InternalAdopt::managed_resource<T>;
 					T*object_ptr = (T*)this->object;
-					T*new_object = Interface::ICloneable::GetClonePtr<T>(*object_ptr);
+					T*new_object = System::Interface::ICloneable::GetClonePtr(*object_ptr);
 					Internal::GCObjectBase*base = new Internal::GCObject<T>(new_object);
 					ptr->tracker = Internal::Tracker::NewInstance();
 					ptr->tracker->reference_target = base;

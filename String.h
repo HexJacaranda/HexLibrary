@@ -14,6 +14,15 @@ namespace HL
 				else
 					return false;
 			}
+			template<class CharT>
+			static inline bool IsHex(CharT const&target_char) {
+				if (target_char <= (CharT)'f'&&target_char >= (CharT)'a')
+					return true;
+				else if (target_char <= (CharT)'F'&&target_char >= (CharT)'A')
+					return true;
+				else
+					return false;
+			}
 			//是否为A-Z,a-z字符
 			template<class CharT>
 			static inline bool IsChar(CharT const&target_char){
@@ -26,6 +35,48 @@ namespace HL
 				{
 					++string;
 					++out;
+				}
+				return out;
+			}
+			template<class CharT>
+			static size_t IntSniff(CharT const*string) {
+				size_t out = 0;
+				if (*string == '-' || IsInt(*string))
+				{
+					string++;
+					out++;
+					while (IsInt(*string))
+					{
+						++string;
+						++out;
+					}	
+				}
+				return out;
+			}
+			template<class CharT>
+			static size_t FloatSniff(CharT const*string) {
+				size_t out = 0;
+				short dot_times = 0;
+				if (*string == '-' || IsInt(*string))
+				{
+					string++;
+					out++;
+					for (;;)
+					{
+						if (*string == L'.')
+						{
+							++dot_times;
+							if (dot_times > 1)
+								return 0;
+						}
+						else
+						{
+							if (!IsInt(*string))
+								break;
+						}
+						++string;
+						++out;
+					}
 				}
 				return out;
 			}
@@ -55,6 +106,32 @@ namespace HL
 						return ret_value*sign;
 				}
 				return ret_value*sign;
+			}
+			template<class IntT,class CharT>
+			static IntT HexToInt(CharT const*string, size_t count)
+			{
+				IntT ret = 0;
+				IntT factor = 0;
+				auto pow = [](IntT base, IntT pow) {
+					if (pow == 0)
+						return 1;
+					IntT ret = base;
+					for (IntT i = 1; i < pow; ++i)
+						ret *= base;
+					return ret;
+				};
+				for (size_t i = count - 1; i >= 0; --i)
+				{
+					if (IsHex(*string))
+						factor = (*string - (CharT)'a') + 10;
+					else if (IsInt(*string))
+						factor = *string - (CharT)'0';
+					else
+						return ret;
+					ret += factor * pow(16, i);
+					string++;
+				}
+				return ret;
 			}
 			template<class FloatT,class CharT>
 			static FloatT StringToFloat(CharT const*string, size_t count) {
@@ -223,7 +300,24 @@ namespace HL
 				for (; *string == target_char; string++) {}
 				return string;
 			}
-
+			template<class CharT>
+			static void ReplaceSingle(Memory::MemoryManager<CharT>&out, index_t index, size_t count, const CharT* newstring, size_t size)
+			{
+				index_t differ = size - count;
+				if (differ > 0)
+				{
+					if (out.GetUsedSize() <= index + size)
+						out.Expand(differ);
+					out.SetUsed(out.GetUsedSize() + differ);
+					out.MoveBackward(index, differ);
+				}
+				else if (differ < 0)
+				{
+					Memory::Allocator::MemoryCopy(out.GetMemoryBlock() + index + count, out.GetMemoryBlock() + index + size, 0, sizeof(CharT)*(out.GetUsedSize() - (index + count)));
+					out.SetUsed(out.GetUsedSize() + differ);
+				}
+				Memory::Allocator::MemoryCopy(newstring, out.GetMemoryBlock() + index, 0, sizeof(CharT)*size);
+			}
 		}
 
 		//字符串格式化接口
@@ -270,45 +364,6 @@ namespace HL
 					}
 				}
 			};
-
-			template<class T>
-			class FormatPattern {
-			public:
-				static void Match(const T* string, size_t count, Memory::MemoryManager<Container::Tuple<index_t, index_t, index_t,size_t>>&out) {
-					bool find_ending = false;
-					const T* last_beginning = string;
-					const T* str_ptr = string;
-					while (*str_ptr != (T)'\0') {
-						if (str_ptr - string + 1 > count)
-							return;
-						if (*str_ptr == (T)'{') {
-							last_beginning = str_ptr;
-							find_ending = true;
-						}
-						else
-						{
-							if (*str_ptr == (T)'}') {
-								size_t length = StringFunction::UIntSniff(last_beginning + 1);
-								if (str_ptr - last_beginning - 1 == length)//中间无任何参数 
-								{
-									index_t number = StringFunction::StringToInt<index_t>(last_beginning + 1, length);
-									out.Append({ last_beginning - string,number,str_ptr - string,length + 1 });
-								}
-								else
-								{
-									if (*(last_beginning + length + 1) == (T)':')//保证是参数
-									{
-										index_t number = StringFunction::StringToInt<index_t>(last_beginning + 1, length);
-										out.Append({ last_beginning - string,number,str_ptr - string,length + 1 });
-									}
-								}
-								find_ending = false;
-							}
-						}
-						++str_ptr;
-					}
-				}
-			};
 		}
 
 		template<class CharT>
@@ -343,7 +398,7 @@ namespace HL
 				size_t new_length = Algorithm::BasicStringLength(New);
 				index_t differ = new_length - old_length;
 				Memory::MemoryManager<index_t> outer;
-				Internal::BasicStringIndexOfAll(Old, this->data.GetMemoryBlock(), outer, old_length, this->Count(), StartInx, EndInx);
+				Algorithm::BasicStringIndexOfAll(Old, this->data.GetMemoryBlock(), outer, old_length, this->Count(), StartInx, EndInx);
 				if (outer.GetUsedSize() > 0)//搜索到了字符
 				{
 					if (differ > 0)//新字符串比原字符串长
@@ -368,11 +423,8 @@ namespace HL
 						for (index_t i = 0; i < outer.GetUsedSize(); ++i)
 							Memory::Allocator::MemoryCopy(New, this->data.GetMemoryBlock() + outer[i], 0, sizeof(CharT)*new_length);//将新字符串填入
 					}
-
 				}
 			}
-			template<class...Args>
-			static void FormatInternal(const CharT*format, ContainerT*out, Args const&...args);
 		public:
 			BasicString():data(0) {}
 			BasicString(size_t length) :data(length) {}
@@ -388,7 +440,7 @@ namespace HL
 				EndWrite();
 			}
 			BasicString(BasicString&& lhs) :data(static_cast<ContainerT&&>(lhs.data)) {}
-		    BasicString(const CharT*string) {
+			BasicString(const CharT*string) {
 				if (string)
 				{
 					this->BeginWrite();
@@ -686,7 +738,6 @@ namespace HL
 				ret.data.ManageFrom(str, count, total);
 				return ret;
 			}
-
 			inline CharT const&operator[](index_t index)const {
 				return this->data[index];
 			}
@@ -716,7 +767,7 @@ namespace HL
 			template<class...Args>
 			static BasicString Format(const CharT*format, Args const&...args) {
 				ContainerT ret;
-				FormatInternal(format, &ret, args...);
+				Internal::Format(ret, format, args...);
 				ret.ShrinkToFit();
 				return ret;
 			}
@@ -726,6 +777,7 @@ namespace HL
 			virtual void* ClonePtr()const final{
 				return new BasicString<CharT>(*this);
 			}
+			virtual ~BasicString() {}
 		};
 
 		//为所有类型提供了转换为String的接口
@@ -798,76 +850,160 @@ namespace HL
 
 		namespace Internal
 		{
-			struct AllToString
+			struct MatchResult
 			{
-				template<class CharT, class T, class...Args>
-				inline static void To(Memory::MemoryManager<BasicString<CharT>>&out, const CharT * format ,Container::Tuple<index_t, index_t, index_t, size_t> *format_args, T const&current, Args const&...args) {
-					CharT const* format_ptr = format + format_args->GetAt<0>() + format_args->GetAt<3>() + 1;//原指针 + 搜索到'{'的位置 + 占位符索引占的长度 + 1 [即为format参数开始的地方]
-					if (format_ptr == format + format_args->GetAt<2>() + 1)
-						format_ptr = nullptr;
-					size_t length = format_args->GetAt<2>() - format_args->GetAt<0>() - format_args->GetAt<3>() - 1;//搜索到'}'的位置 - 搜索到'{'的位置 - 占位符索引占的长度 - 1 [即为期待的format参数长度]
-					BasicString<CharT> str = StringFormat<T, CharT>::Format(current, format_ptr, length);
-					out.Append(str);
-					To<CharT, Args...>(out, format, ++format_args, args...);//继续,将format_args参数移到下一个对象
-				}
-				template<class CharT, class T>
-				inline static void To(Memory::MemoryManager<BasicString<CharT>>&out, const CharT * format , Container::Tuple<index_t, index_t, index_t, size_t> *format_args, T const&current) {
-					CharT const* format_ptr = format + format_args->GetAt<0>() + format_args->GetAt<3>() + 1;//原指针 + 搜索到'{'的位置 + 占位符索引占的长度 + 1 [即为format参数开始的地方]
-					if (format_ptr == format + format_args->GetAt<2>() + 1)
-						format_ptr = nullptr;
-					size_t length = format_args->GetAt<2>() - format_args->GetAt<0>() - format_args->GetAt<3>() - 1;//搜索到'}'的位置 - 搜索到'{'的位置 - 占位符索引占的长度 - 1 [即为期待的format参数长度]
-					BasicString<CharT> str = StringFormat<T, CharT>::Format(current, format_ptr, length);
-					out.Append(str);
-				}
+				index_t Start = -1;//括号开始
+				index_t Index = -1;//占位索引
+				index_t End = -1;//括号结束
+				index_t Param = -1;//参数起始(-1表示无参数)
+				size_t IndexLen = 0;
 			};
-		}
-
-		template<class CharT>
-		template<class ...Args>
-		inline void BasicString<CharT>::FormatInternal(const CharT * format, ContainerT * out, Args const & ...args)
-		{
-			size_t length = Algorithm::BasicStringLength(format);
-			out->Append(format, length);
-			Memory::MemoryManager<Container::Tuple<index_t, index_t, index_t, size_t>>outer;//容器,用于存放占位符位置极其信息 {左括号处索引,中间整数,右括号处索引}
-			Memory::MemoryManager<BasicString<CharT>>to_string(sizeof...(Args)); //容器,用于存放args参数转换为的string
-			Internal::FormatPattern<CharT>::Match(format, length, outer);//匹配占位符
-			Internal::AllToString::To(to_string, format, outer.GetMemoryBlock(), args...);//将参数转换为字符串
-			
-			index_t offset = 0;//当改动后,索引就会发生相应偏移
-			for (index_t i = 0; i < outer.GetUsedSize(); ++i) {
-				if (outer[i].GetAt<1>() <= sizeof...(Args) && outer[i].GetAt<1>() >= 0)//确认中间的整数是落在范围内的
+			template<class CharT>
+			struct ReplacePair
+			{
+				MatchResult* Result;
+				BasicString<CharT> Replace;
+			};
+			typedef Memory::MemoryManager<MatchResult> MatchResults;		
+			template<class T>
+			static MatchResult MatchSingle(const T* string,index_t base,size_t count)
+			{
+				MatchResult match;
+				bool escape = false;//转义判定
+				bool beg = false;
+				for (index_t i = base; i < count; ++i)
 				{
-					BasicString&current_str = to_string[outer[i].GetAt<1>()];//取对应对象转换成string的引用
-					size_t num_length = (outer[i].GetAt<2>() - outer[i].GetAt<0>() + 1);//计算占位符占了多长 例如{0}是3
-					index_t differ = current_str.Count() - num_length;//计算插入字符串与占位符长度的差值
-					//处理与Replace如出一辙
-					if (differ > 0)//新字符串比原字符串长
+					if (string[i] == (T)'\\')
 					{
-						out->Expand(differ * 2);
-						out->MoveBackward(outer[i].GetAt<0>() + offset, differ);//向后移动差值单位
-						Memory::Allocator::MemoryCopy(current_str.GetData(), out->GetMemoryBlock() + outer[i].GetAt<0>() + offset, 0, sizeof(CharT)*current_str.Count());//将新字符串填入
+						escape = true;
+						if (i + 1 < count)
+						{
+							if (string[i + 1] != '{')
+								escape = false;
+						}
+						else
+							return match;
 					}
-					else if (differ < 0)
+					else if (string[i] == (T)'{' && !escape)
 					{
-						Memory::Allocator::MemoryCopy(current_str.GetData(), out->GetMemoryBlock() + outer[i].GetAt<0>() + offset, 0, sizeof(CharT)*current_str.Count());//将新字符串填入
-						Memory::Allocator::MemoryCopy(out->GetMemoryBlock() + outer[i].GetAt<0>() + offset + num_length, out->GetMemoryBlock() + outer[i].GetAt<0>() + offset + current_str.Count(), 0, sizeof(CharT)*(out->GetUsedSize() - (outer[i].GetAt<0>() + offset)));//向前移动
+						escape = false;
+						match.Start = i;
+						i++;
+						if (StringFunction::IsInt(string[i]))
+						{
+							//嗅探+处理占位符
+							size_t size = StringFunction::UIntSniff(string + i);
+							if (size == 0)
+								HL::Exception::Throw<HL::Exception::ParserException>(L"Invalid placeholder!");
+							match.IndexLen = size;
+							match.Index = StringFunction::StringToInt<index_t>(string + i, size);
+							//嗅探+处理参数
+							i += size;//跳过占位符
+							if (string[i] == (T)':')
+								match.Param = i;
+							while (i < count)
+							{
+								if (string[i] == (T)'\\')
+									escape = true;
+								else if (string[i] == (T)'}' && !escape)
+								{
+									escape = false;
+									match.End = i;
+									return match;
+								}
+								i++;
+							}
+						}
 					}
-					else//differ==0
+				}
+				return match;
+			}
+			template<class T>
+			static Generic::array<MatchResults*> MatchAll(const T* string, size_t count)
+			{
+				Generic::array<MatchResults*> ret;
+				index_t offset = 0;
+				for (; offset < count;)
+				{
+					MatchResult result = MatchSingle(string, offset, count);
+					if (result.Index == -1)
+						return Forward(ret);
+					offset += result.End;
+					if (ret.Count() <= result.Index)
+						ret.ExpandTo(result.Index + 1);
+					if (ret[result.Index] == nullptr)
+						ret[result.Index] = new Memory::MemoryManager<MatchResult>(1);
+					ret[result.Index]->Append(result);
+				}
+				return Forward(ret);
+			}
+			template<class CharT, class...Args>
+			static void Format(Memory::MemoryManager<CharT>&out, const CharT* format, Args const&...args)
+			{
+				size_t length = Algorithm::BasicStringLength(format);
+				out.Append(format, length);
+				Generic::array<MatchResults*> matches = MatchAll(format, length);
+				Memory::MemoryManager<ReplacePair<CharT>> strings;
+				FormatHelp(out, matches.GetData(), format, args...);
+				if (out[out.GetUsedSize() - 1] != (CharT)'\0')
+					out.Append((CharT)'\0');
+				for (index_t i = 0; i < matches.Count(); ++i)
+					if (matches[i] != nullptr)delete matches[i];
+			}
+			template<class CharT,class FirstT,class...Args>
+			static void FormatHelp(Memory::MemoryManager<CharT>&out, MatchResults*const*matches, const CharT* format, FirstT const&first, Args const&...args)
+			{
+				if (*matches != nullptr)
+				{
+					MatchResults&results = **matches;
+					index_t offset = 0;
+					for (index_t i = 0; i < results.GetUsedSize(); i++)
 					{
-						Memory::Allocator::MemoryCopy(current_str.GetData(), out->GetMemoryBlock() + outer[i].GetAt<0>() + offset, 0, sizeof(CharT)*current_str.Count());//将新字符串填入
+						size_t length = 0;//参数长度
+						const CharT* format_ptr = nullptr;//参数起始
+						if (results[i].Param != -1)
+						{
+							format_ptr = format + results[i].Param + 1;
+							length = results[i].End - results[i].Start - results[i].IndexLen - 1;
+						}
+						String in = Forward(StringFormat<FirstT, CharT>::Format(first, format_ptr, length));
+						size_t old = results[i].End - results[i].Start + 1;
+						StringFunction::ReplaceSingle(out, results[i].Start + offset, old, in.GetData(), in.Count());
+						offset += in.Count() - old;
 					}
-					offset += differ;//最后改动后应将offset加上改动值
+				}
+				FormatHelp(out, ++matches, format, args...);
+			}
+			template<class CharT, class FirstT>
+			static void FormatHelp(Memory::MemoryManager<CharT>&out, MatchResults*const*matches, const CharT* format, FirstT const&first)
+			{
+				if (*matches != nullptr)
+				{
+					MatchResults&results = **matches;
+					index_t offset = 0;
+					for (index_t i = 0; i < results.GetUsedSize(); i++)
+					{
+						size_t length = 0;//参数长度
+						const CharT* format_ptr = nullptr;//参数起始
+						if (results[i].Param != -1)
+						{
+							format_ptr = format + results[i].Param + 1;
+							length = results[i].End - results[i].Start - results[i].IndexLen - 1;
+						}
+						String in = Forward(StringFormat<FirstT, CharT>::Format(first, format_ptr, length));
+						size_t old = results[i].End - results[i].Start + 1;
+						StringFunction::ReplaceSingle(out, results[i].Start + offset, old, in.GetData(), in.Count());
+						offset += in.Count() - old;
+					}
 				}
 			}
-			out->Append((CharT)'\0');//添加结束符
 		}
-
 		//默认值类型特化
 		template<class InT,class CharT>
 		class StringFormat
 		{
 		public:
-			inline static BasicString<CharT> Format(InT const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(InT const& object, CharT const*format_args, size_t length)
 			{
 				return BasicString<CharT>((size_t)0);
 			}
@@ -876,7 +1012,7 @@ namespace HL
 		class StringFormat<int, CharT>
 		{
 		public:
-			inline static BasicString<CharT> Format(int const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(int const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(12);
 				if (format_args == nullptr)
@@ -900,7 +1036,7 @@ namespace HL
 		class StringFormat<short, CharT>
 		{
 		public:
-			inline static BasicString<CharT> Format(int const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(int const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(6);
 				if (format_args == nullptr)
@@ -924,7 +1060,7 @@ namespace HL
 		class StringFormat<long, CharT>
 		{
 		public:
-			inline static BasicString<CharT> Format(long const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(long const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(12);
 				if (format_args == nullptr)
@@ -948,7 +1084,7 @@ namespace HL
 		class StringFormat<long long, CharT>
 		{
 		public:
-			inline static BasicString<CharT> Format(long long const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(long long const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(20);
 				if (format_args == nullptr)
@@ -972,7 +1108,7 @@ namespace HL
 		class StringFormat<unsigned int, CharT>
 		{
 		public:
-			inline static BasicString<CharT> Format(unsigned int const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(unsigned int const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(12);
 				if (format_args == nullptr)
@@ -996,7 +1132,7 @@ namespace HL
 		class StringFormat<unsigned long, CharT>
 		{
 		public:
-			inline static BasicString<CharT> Format(unsigned long const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(unsigned long const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(12);
 				if (format_args == nullptr)
@@ -1020,7 +1156,7 @@ namespace HL
 		class StringFormat<unsigned long long, CharT>
 		{
 		public:
-			inline static BasicString<CharT> Format(unsigned long long const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(unsigned long long const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(20);
 				if (format_args == nullptr)
@@ -1044,7 +1180,7 @@ namespace HL
 		class StringFormat<unsigned short, CharT>
 		{
 		public:
-			inline static BasicString<CharT> Format(unsigned short const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(unsigned short const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(5);
 				if (format_args == nullptr)
@@ -1068,7 +1204,7 @@ namespace HL
 		class StringFormat<double, CharT>
 		{
 		public:
-			inline static BasicString<wchar_t> Format(double const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(double const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(15);
 				if (format_args == nullptr)
@@ -1092,7 +1228,7 @@ namespace HL
 		class StringFormat<long double, CharT>
 		{
 		public:
-			inline static BasicString<wchar_t> Format(long double const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(long double const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(15);
 				if (format_args == nullptr)
@@ -1116,7 +1252,7 @@ namespace HL
 		class StringFormat<float, CharT>
 		{
 		public:
-			inline static BasicString<wchar_t> Format(float const& object, CharT const*format_args, size_t length)
+			static BasicString<CharT> Format(float const& object, CharT const*format_args, size_t length)
 			{
 				Memory::MemoryManager<CharT> ret(15);
 				if (format_args == nullptr)
@@ -1140,7 +1276,7 @@ namespace HL
 		class StringFormat<BasicString<CharT>, CharT>
 		{
 		public:
-			inline static BasicString<wchar_t> Format(BasicString<CharT> const& object, CharT const*format_args, size_t length) {
+			static BasicString<CharT> Format(BasicString<CharT> const& object, CharT const*format_args, size_t length) {
 				//现在默认无功能
 				return object;
 			}

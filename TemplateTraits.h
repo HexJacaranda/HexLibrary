@@ -415,16 +415,6 @@ namespace HL
 
 #define TypeIf(Statement,TypeL,TypeR) typename If<Statement,TypeL,TypeR>::T
 
-		template<class T>
-		inline constexpr T&& Forward(typename RemoveLReference<T>::T&&Arg)noexcept
-		{
-			return static_cast<T&&>(Arg);
-		}
-		template<class T>
-		inline constexpr T&& Forward(typename RemoveLReference<T>::T&Arg)noexcept
-		{
-			return static_cast<T&&>(Arg);
-		}
 
 #define HasFunctionMember(Member)\
 		template<class TT, class Ret, class...Args>\
@@ -540,5 +530,13 @@ namespace HL
 			typedef typename RetSwitch<Template::IsSame<HL::Void, FirstT>::R, FirstT, Functor>::R R;
 			typedef typename TypesSwitch<Template::IsSame<TypeList<HL::Void>, FirstTypes>::R, FirstTypes, Functor>::R Types;
 		};
+	}
+	namespace System
+	{
+		template<class T>
+		inline constexpr typename Template::RemoveLReference<T>::T&& Forward(T&&Arg)noexcept
+		{
+			return static_cast<typename Template::RemoveLReference<T>::T&&>(Arg);
+		}
 	}
 }

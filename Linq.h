@@ -25,13 +25,15 @@ namespace HL
 				}
 				virtual Iteration::EnumerationResult MoveNext() final {
 					Iteration::EnumerationResult result;
-					do 
+					for (;;)
 					{
 						result = m_iter->MoveNext();
+						if (result == Iteration::EnumerationResult::EOE)
+							break;
 						this->CurrentObject = &m_iter->Current();
 						if (m_predicate(*this->CurrentObject))
 							return Iteration::EnumerationResult::Successful;
-					} while (result != Iteration::EnumerationResult::EOE);
+					}
 					return Iteration::EnumerationResult::EOE;
 				}
 				virtual WhereEnumerator& operator=(Iteration::IEnumerator<T>const&rhs)final {
@@ -42,6 +44,7 @@ namespace HL
 				virtual void* ClonePtr()const final {
 					return new WhereEnumerator(*this);
 				}
+				virtual ~WhereEnumerator() {}
 			};
 
 			//选择迭代器
@@ -61,13 +64,14 @@ namespace HL
 					this->CurrentObject = &m_cast(m_iter->Current());
 					return ret;
 				}
-				virtual IEnumerator<T>& operator=(IEnumerator<T>const&rhs) final {
+				virtual SelectEnumerator& operator=(Iteration::IEnumerator<T>const&rhs) final {
 					this->m_iter.SetValue(static_cast<SelectEnumerator const&>(rhs).m_iter);
 					return *this;
 				}
 				virtual void* ClonePtr()const final {
 					return new SelectEnumerator(*this);
 				}
+				virtual ~SelectEnumerator() {}
 			};
 
 			//连接迭代器
@@ -113,7 +117,7 @@ namespace HL
 					while (this->m_first->MoveNext() != Iteration::EnumerationResult::EOE);
 					return Iteration::EnumerationResult::EOE;
 				}
-				virtual IEnumerator<T>& operator=(Iteration::IEnumerator<T>const&rhs) final {
+				virtual JoinEnumerator& operator=(Iteration::IEnumerator<T>const&rhs) final {
 					JoinEnumerator const& another = static_cast<JoinEnumerator const&>(rhs);
 					this->m_current = another.m_current;
 					this->CurrentObject = another.CurrentObject;
@@ -125,6 +129,7 @@ namespace HL
 				virtual void* ClonePtr()const final {
 					return new JoinEnumerator(*this);
 				}
+				virtual ~JoinEnumerator() {}
 			};
 			
 			//排序顺序
@@ -155,9 +160,9 @@ namespace HL
 						m_ordered_objects.Append(Reference::Ref<T>(iter->Current()));
 					} while (iter->MoveNext() == Iteration::EnumerationResult::Successful);
 					if (order == SortOrder::Ascending)
-						Algorithm::Sort(m_ordered_objects.GetMemoryBlock(), 0, m_ordered_objects.GetUsedSize() - 1, [this](Ref<T>&left, Ref<T>&right) { return m_compare(left, right); });
+						Algorithm::Sort(m_ordered_objects.GetMemoryBlock(), 0, m_ordered_objects.GetUsedSize() - 1, [this](Reference::Ref<T>&left, Reference::Ref<T>&right) { return m_compare(left, right); });
 					else
-						Algorithm::Sort(m_ordered_objects.GetMemoryBlock(), 0, m_ordered_objects.GetUsedSize() - 1, [this](Ref<T>&left, Ref<T>&right) { return (-1)*m_compare(left, right); });
+						Algorithm::Sort(m_ordered_objects.GetMemoryBlock(), 0, m_ordered_objects.GetUsedSize() - 1, [this](Reference::Ref<T>&left, Reference::Ref<T>&right) { return (-1)*m_compare(left, right); });
 					this->beg_ptr = m_ordered_objects.GetMemoryBlock();
 					this->end_ptr = this->beg_ptr + m_ordered_objects.GetUsedSize();
 					this->CurrentObject = &beg_ptr->operator T &();
@@ -169,7 +174,7 @@ namespace HL
 						return Iteration::EnumerationResult::EOE;
 					return Iteration::EnumerationResult::Successful;
 				}
-				virtual IEnumerator<T>& operator=(Iteration::IEnumerator<T>const&rhs) final {
+				virtual OrderEnumerator& operator=(Iteration::IEnumerator<T>const&rhs) final {
 					OrderEnumerator const& another = static_cast<OrderEnumerator const&>(rhs);
 					this->CurrentObject = another.CurrentObject;
 					this->m_ordered_objects = another.m_ordered_objects;
@@ -178,6 +183,7 @@ namespace HL
 				virtual void* ClonePtr()const final {
 					return new OrderEnumerator(*this);
 				}
+				virtual ~OrderEnumerator() {}
 			};
 
 			//Linq方法拓展(基枚举器)
@@ -232,6 +238,7 @@ namespace HL
 				{
 					return m_iter.Clone();
 				}
+				virtual ~LinqQueryResult() {}
 			};
 
 			template<class T>

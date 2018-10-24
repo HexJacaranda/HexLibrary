@@ -22,134 +22,97 @@ namespace HL
 				Write(temp);
 			}
 			static void Write(String const&Message) {
-				ConsoleMutex().Lock();
 				std::wcout << Message;
-				ConsoleMutex().UnLock();
+			}
+			static void Write(const char&Message) {
+				std::cout << Message;
+			}
+			static void Write(const wchar_t&Message) {
+				std::wcout << Message;
 			}
 			template<class...Args>
-			static void WriteLine(const wchar_t*Format, Args const...args) {
-				String temp = String::Format(Format, args...);
-				WriteLine(temp);
+			static void WriteLine(const wchar_t*Format, Args const&...args) {
+				WriteLine(String::Format(Format, args...));
 			}
 			static void WriteLine(const wchar_t*Message) {
-				ConsoleMutex().Lock();
 				std::wcout << Message << std::endl;
-				ConsoleMutex().UnLock();
 			}
 
 			static void WriteLine(String const&Message) {
-				ConsoleMutex().Lock();
 				std::wcout << Message << std::endl;
-				ConsoleMutex().UnLock();
 			}
 			static void WriteLine(const char*Message) {
-				ConsoleMutex().Lock();
 				std::cout << Message << std::endl;
-				ConsoleMutex().UnLock();
+			}
+			static void WriteLine(const char&Message) {
+				std::cout << Message << std::endl;
+			}
+			static void WriteLine(const wchar_t&Message) {
+				std::wcout << Message << std::endl;
 			}
 			//数值类型
 			static void WriteLine(int number) {
 				ConsoleMutex().Lock();
-				wprintf_s(L"%d \n", number);
+				std::wcout << number << std::endl;
 				ConsoleMutex().UnLock();
 			}
 			static void WriteLine(unsigned number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%u \n", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number << std::endl;
 			}
 			static void WriteLine(long number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%ld \n", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number << std::endl;
 			}
 			static void WriteLine(unsigned long number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%u \n", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number << std::endl;
 			}
 			static void WriteLine(long long number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%lld \n", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number << std::endl;
 			}
 			static void WriteLine(unsigned long long number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%llu \n", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number << std::endl;
 			}
 			static void WriteLine(float number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%f \n", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number << std::endl;
 			}
 			static void WriteLine(double number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%lf \n", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number << std::endl;
 			}
 			static void WriteLine(short number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%hd \n", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number << std::endl;
 			}
 
 			static void Write(int number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%d", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number;
 			}
 			static void Write(unsigned number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%u", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number;
 			}
 			static void Write(long number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%ld", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number;
 			}
 			static void Write(unsigned long number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%lu", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number;
 			}
 			static void Write(long long number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%lld", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number;
 			}
 			static void Write(unsigned long long number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%llu", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number;
 			}
 			static void Write(float number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%f", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number;
 			}
 			static void Write(double number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%lf", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number;
 			}
 			static void Write(short number) {
-				ConsoleMutex().Lock();
-				wprintf_s(L"%hd", number);
-				ConsoleMutex().UnLock();
+				std::wcout << number;
 			}
-
 			static void Write(bool boolean) {
-				ConsoleMutex().Lock();
-				wprintf_s(boolean ? L"True" : L"False");
-				ConsoleMutex().UnLock();
+				std::wcout << (boolean ? L"True" : L"False");
 			}
 			static void WriteLine(bool boolean) {
-				ConsoleMutex().Lock();
-				wprintf_s(boolean ? L"True" : L"False");
-				wprintf_s(L"\n");
-				ConsoleMutex().UnLock();
+				std::wcout << (boolean ? L"True" : L"False") << std::endl;
 			}
 			static void Pause() {
 				system("pause");

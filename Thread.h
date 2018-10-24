@@ -110,6 +110,15 @@ namespace HL
 					result.thread->Join();
 					return result.thread->pack->async_ret;
 				}
+				template<class FirstT,class...Args>
+				static void WaitAll(FirstT const& first, Args const&...args) {
+					first.thread->Join();
+					WaitAll(args...);
+				}
+				template<class FirstT>
+				static void WaitAll(FirstT const& first) {
+					first.thread->Join();
+				}
 				static void Await(AsyncResult<void> const&result) {
 					if (result.thread.IsNull())
 						HL::Exception::Throw<HL::Exception::ArgumentNullException>();
@@ -136,7 +145,7 @@ namespace HL
 				}
 				//异步执行
 				template<class T, class...Args>
-				static AsyncResult<T> Run(Functional::Delegate<Functional::Auto> const&target, UPointer::uobject const& object, Args const&...args) {
+				static AsyncResult<T> RunWith(Functional::Delegate<Functional::Auto> const&target, UPointer::uobject const& object, Args const&...args) {
 					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(target, object, params(args...));
 					Thr->Start();
 					return Thr;
@@ -145,16 +154,16 @@ namespace HL
 				template<class...Args,class Functor>
 				static AsyncResult<typename Template::GetFunctionInfo<Functor>::R> Run(Functor fx, Args const&...args)
 				{
-					Functional::Delegate<Functional::Auto>Func = Bind(fx);
+					Functional::Delegate<Functional::Auto>Func = Functional::Bind(fx);
 					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(Func, nullptr, Functional::params(args...));
 					Thr->Start();
 					return Thr;
 				}
 				//异步执行
 				template<class...Args, class TT, class Functor>
-				static AsyncResult<typename Template::GetFunctionInfo<Functor>::R> Run(Functor fx, TT*obj, Args const&...args)
+				static AsyncResult<typename Template::GetFunctionInfo<Functor>::R> RunWith(Functor fx, TT*obj, Args const&...args)
 				{
-					Functional::Delegate<Functional::Auto>Func = Bind(fx, obj);
+					Functional::Delegate<Functional::Auto>Func = Functional::Bind(fx, obj);
 					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(Func, nullptr, Functional::params(args...));
 					Thr->Start();
 					return Thr;

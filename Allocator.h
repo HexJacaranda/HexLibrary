@@ -9,6 +9,13 @@ namespace HL
 	{
 		namespace Memory
 		{
+			//·ÖÅäÆ÷½Ó¿Ú
+			class IAllocator
+			{
+			public:
+				virtual void* Alloc(size_t) = 0;
+				virtual void Free(void*) = 0;
+			};
 			class Allocator
 			{
 				static void* internal_alloc(size_t size) {
