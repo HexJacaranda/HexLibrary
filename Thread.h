@@ -63,11 +63,13 @@ namespace HL
 				static void Proxy(void*args) {
 					UPointer::uptr<TaskPackage>*ptr = (UPointer::uptr<TaskPackage>*)args;
 					uobject ret = nullptr;
-					if (ptr->operator->()->ObjectPtr.IsNull())
-						ret = ptr->operator->()->Target.Invoke(ptr->operator->()->Arguments);
+					if (ptr->GetObjectPtr()->ObjectPtr.IsNull())
+						ret = ptr->GetObjectPtr()->Target.Invoke(ptr->GetObjectPtr()->Arguments);
 					else
-						ret = ptr->operator->()->Target.UInvoke(ptr->operator->()->ObjectPtr, ptr->operator->()->Arguments);
-					ptr->operator->()->AsyncResult = ret;
+						ret = ptr->GetObjectPtr()->Target.UInvoke(ptr->GetObjectPtr()->ObjectPtr, ptr->GetObjectPtr()->Arguments);
+					ptr->GetObjectPtr()->AsyncResult = ret;
+					ptr->GetObjectPtr()->CurrentThread = nullptr;
+					ptr->SetToNull();
 					IThread::Close(nullptr);
 				}
 			public:
@@ -161,14 +163,14 @@ namespace HL
 				}
 				//异步执行
 				template<class T,class...Args>
-				static UPointer::uptr<Task<T>> Run(Functional::Delegate<Functional::Auto> const&Target, Args const&...args) {
+				static UPointer::uptr<Task<T>> RunVia(Functional::Delegate<Functional::Auto> const&Target, Args const&...args) {
 					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, nullptr, params(args...));
 					GC::newgc<Threading::Thread>(package)->Go();
 					return Reference::newptr<Task<T>>(package);
 				}
 				//异步执行
 				template<class T, class...Args>
-				static UPointer::uptr<Task<T>> RunWith(Functional::Delegate<Functional::Auto> const&Target, UPointer::uobject const& Object, Args const&...args) {
+				static UPointer::uptr<Task<T>> RunViaWith(Functional::Delegate<Functional::Auto> const&Target, UPointer::uobject const& Object, Args const&...args) {
 					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, Object, params(args...));
 					GC::newgc<Threading::Thread>(package)->Go();
 					return Reference::newptr<Task<T>>(package);
@@ -181,7 +183,7 @@ namespace HL
 					return Reference::newptr<Task<typename Template::GetFunctionInfo<Functor>::R>>(package);
 				}
 				//异步执行
-				template<class Functor,class TT,class...Args>
+				template<class Functor, class TT, class...Args>
 				static UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> RunWith(Functor Target, TT*Object, Args const&...args) {
 					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target, Object), nullptr, params(args...));
 					GC::newgc<Threading::Thread>(package)->Go();
