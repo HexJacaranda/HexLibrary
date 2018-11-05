@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 namespace HL
 {
 	namespace System
@@ -121,15 +122,14 @@ namespace HL
 				Mutex() {
 					mutex_ptr = CreateMutexW(nullptr, false, nullptr);
 				}
-				void Lock()
+				inline void Lock()
 				{
-					
 					WaitForSingleObject(mutex_ptr, INFINITE);
 				}
-				void Lock(DWORD milisecs) {
+				inline void Lock(DWORD milisecs) {
 					WaitForSingleObject(mutex_ptr, milisecs);
 				}
-				void UnLock() {
+				inline void UnLock() {
 					ReleaseMutex(mutex_ptr);
 				}
 				~Mutex() {
@@ -141,18 +141,30 @@ namespace HL
 				}
 			};
 
-			
+			//自旋锁
+			class SpinLock
+			{
+				std::atomic_flag m_flag = ATOMIC_FLAG_INIT;
+			public:
+				inline void Lock() {
+					while (m_flag.test_and_set(std::memory_order_acquire));
+				}
+				inline void Unlock() {
+					m_flag.clear(std::memory_order_release);
+				}
+			};
+
 			class Volatile
 			{
 				AtomicCounter m_operation_enter_counter = 0;
 				AtomicCounter m_operation_exit_counter = 0;
-				Mutex m_enter;
+				SpinLock m_enter;
 			public:
 				//进入操作临界区
 				inline void OperationEnter() {
 					this->m_enter.Lock();
 					++this->m_operation_enter_counter;
-					this->m_enter.UnLock();
+					this->m_enter.Unlock();
 				}
 				//退出操作临界区
 				inline void OperationExit() {
@@ -165,7 +177,7 @@ namespace HL
 				}
 				//解锁(宿主)
 				inline void UnLock() {
-					this->m_enter.UnLock();
+					this->m_enter.Unlock();
 				}
 			};
 			
