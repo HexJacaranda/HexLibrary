@@ -15,6 +15,7 @@
 #include "algorithm.h"
 #include "Covariance.h"
 #include "Interface.h"
+#include "Timer.h"
 #include "IntPtr.h"
 #include "Allocator.h"
 #include "Hash.h"

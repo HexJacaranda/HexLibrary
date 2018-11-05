@@ -60,7 +60,7 @@ namespace HL
 				MemoryManager(size_t, size_t);
 				MemoryManager(T const*, size_t, size_t);
 				MemoryManager(MemoryManager const&);
-				MemoryManager(MemoryManager&&);
+				MemoryManager(MemoryManager&&)noexcept;
 				void Append(T const&);
 				template<class AnyT>
 				void Append(AnyT const&);
@@ -154,7 +154,7 @@ namespace HL
 				internal_ctor(rhs.m_data, rhs.m_used, rhs.m_rank);
 			}
 			template<class T>
-			inline MemoryManager<T>::MemoryManager(MemoryManager &&lhs) :m_data(lhs.m_data), m_used(lhs.m_used), m_max(lhs.m_max), m_rank(lhs.m_rank)
+			inline MemoryManager<T>::MemoryManager(MemoryManager &&lhs)noexcept :m_data(lhs.m_data), m_used(lhs.m_used), m_max(lhs.m_max), m_rank(lhs.m_rank)
 			{
 				lhs.m_data = nullptr;
 			}

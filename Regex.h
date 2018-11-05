@@ -603,6 +603,11 @@ namespace HL
 					return ParseNFA(0, m_tokenizer.Count());
 				}
 			};
+
+			class DFA
+			{
+
+			};
 		}
 	};
 };

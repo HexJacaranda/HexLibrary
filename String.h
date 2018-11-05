@@ -439,7 +439,7 @@ namespace HL
 				this->data.Append(rhs.GetData(), rhs.Count());
 				EndWrite();
 			}
-			BasicString(BasicString&& lhs) :data(static_cast<ContainerT&&>(lhs.data)) {}
+			BasicString(BasicString&& lhs)noexcept :data(static_cast<ContainerT&&>(lhs.data)) {}
 			BasicString(const CharT*string) {
 				if (string)
 				{
@@ -453,7 +453,7 @@ namespace HL
 				this->EndWrite();
 				return *this;
 			}
-			BasicString&operator=(BasicString &&lhs) {
+			BasicString&operator=(BasicString &&lhs)noexcept {
 				this->data = static_cast<ContainerT&&>(lhs.data);
 				this->EndWrite();
 				return *this;

@@ -128,6 +128,17 @@ namespace HL
 			template<class T>
 			class ConcurrentQueue;
 		}
+		namespace RegularExpression
+		{
+			class Regex;
+			class MatchResult;
+
+			class Edge;
+			class Status;
+			class ContentBase;
+			class NFA;
+			class Resource;
+		}
 	}
 	namespace Cast
 	{

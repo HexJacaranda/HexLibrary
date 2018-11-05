@@ -283,7 +283,7 @@ namespace HL
 					this->m_freecount = rhs.m_freecount;
 				}
 
-				Dictionary(Dictionary &&lhs) {
+				Dictionary(Dictionary &&lhs)noexcept {
 					this->m_buckets = Forward(lhs.m_buckets);
 					this->m_entries = Forward(lhs.m_entries);
 					this->m_count = lhs.m_count;
@@ -301,7 +301,7 @@ namespace HL
 					return *this;
 				}
 
-				Dictionary&operator=(Dictionary &&lhs) {
+				Dictionary&operator=(Dictionary &&lhs)noexcept {
 					this->Clear();
 					this->m_buckets = Forward(lhs.m_buckets);
 					this->m_entries = Forward(lhs.m_entries);

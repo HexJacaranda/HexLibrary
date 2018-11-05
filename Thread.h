@@ -6,170 +6,189 @@ namespace HL
 	{
 		namespace Threading
 		{
-			namespace Internal
+			//线程基础操作接口
+			class IThread
 			{
-				struct thread_pack
-				{
-					Functional::Delegate<Functional::Auto> target_function;//目标函数
-					Generic::UArray<UPointer::uobject> parameters;//参数
-					UThread self_reference;//自引用
-					UPointer::uobject object_ptr;//对象指针
-					UPointer::uobject async_ret;//异步返回值
-				};
-			}
-
-			class Thread:public UPointer::UPtrThis<Thread>
-			{
-				friend class Task;
-			private:
-				HANDLE tid;
-				Internal::thread_pack*pack = nullptr;
-				static void TargetFun(void*args) {
-					Internal::thread_pack*lptr = (Internal::thread_pack*)args;
-					if (lptr->object_ptr.IsNull())
-						lptr->async_ret = lptr->target_function.Invoke(lptr->parameters);
-					else
-						lptr->async_ret = lptr->target_function.UInvoke(lptr->object_ptr, lptr->parameters);
-					lptr->self_reference = nullptr;
-				}
 			public:
-				Thread(Functional::Delegate<Functional::Auto> const& Target,UPointer::uobject const& Object,Generic::UArray<UPointer::uobject> const& Args) {
-					pack = new Internal::thread_pack;
-					pack->target_function = Target;
-					pack->parameters = Args;
-					pack->object_ptr = Object;
+				typedef void* Handle;
+				//等待无限时间
+				static const unsigned long Infinite = 0xFFFFFFFF;
+				//睡眠
+				static void SleepFor(unsigned long Miliseconds) {
+					Sleep(Miliseconds);
 				}
 				//启动线程
-				inline void Start() {
-					if (pack)
-					{
-						pack->self_reference = this->GetThisUPtr();
-						tid = (void*)(_beginthread(TargetFun, 0, this->pack));
-					}
+				template<class Fun>
+				static Handle StartNativeThread(Fun Target, size_t StackSize, void*Args) {
+					return (Handle)_beginthread(Target, StackSize, Args);
 				}
-				inline void Join()const {
-					WaitForSingleObject(tid, INFINITE);
+				//等待线程
+				static void WaitFor(Handle Target, unsigned long Miliseconds) {
+					WaitForSingleObject(Target, Miliseconds);
 				}
-				inline void Wait(unsigned long MiliSeconds)const {
-					WaitForSingleObject(tid, MiliSeconds);
-				}
-				Thread&operator=(Thread const&) = delete;
-				Thread&operator=(Thread&&rhs) {
-					this->~Thread();
-					if (rhs.pack)
-					{
-						pack = rhs.pack;
-						tid = rhs.tid;
-						rhs.pack = nullptr;
-					}
-					return *this;
-				}
-				~Thread()
-				{
-					if (pack) {
-						delete pack;
-						pack = nullptr;
-					}
+				//关闭线程
+				static void Close(Handle Target) {
+					_endthread();
 				}
 			};
 
-			//异步返回值
+			//Task包
+			class TaskPackage
+			{
+			public:
+				//异步结果
+				UPointer::uobject AsyncResult;
+				//目标函数
+				Functional::Delegate<Functional::Auto> Target;
+				//当前线程
+				UPointer::uptr<Thread> CurrentThread;
+				//成员函数所需指针
+				UPointer::uobject ObjectPtr;
+				//参数
+				Generic::UArray<UPointer::uobject> Arguments;
+
+				TaskPackage(Functional::Delegate<Functional::Auto> const& TargetFun, UPointer::uobject const& Object, Generic::UArray<UPointer::uobject> const& Args) {
+					Arguments = Args;
+					ObjectPtr = Object;
+					Target = TargetFun;
+				}
+			};
+
+			//线程类
+			class Thread:public UPointer::UPtrThis<Thread>
+			{
+				IThread::Handle m_handle;
+				UPointer::uptr<TaskPackage> m_task_package;
+
+				static void Proxy(void*args) {
+					UPointer::uptr<TaskPackage>*ptr = (UPointer::uptr<TaskPackage>*)args;
+					uobject ret = nullptr;
+					if (ptr->operator->()->ObjectPtr.IsNull())
+						ret = ptr->operator->()->Target.Invoke(ptr->operator->()->Arguments);
+					else
+						ret = ptr->operator->()->Target.UInvoke(ptr->operator->()->ObjectPtr, ptr->operator->()->Arguments);
+					ptr->operator->()->AsyncResult = ret;
+					IThread::Close(nullptr);
+				}
+			public:
+				Thread(UPointer::uptr<TaskPackage> const&Target) :m_task_package(Target) {
+				}
+				Thread(Functional::Delegate<Functional::Auto> const& Target, UPointer::uobject const& Object, Generic::UArray<UPointer::uobject> const& Args) {
+					m_task_package = Reference::newptr<TaskPackage>(Target, Object, Args);
+				}
+				void Go() {
+					m_task_package->CurrentThread = this->GetThisUPtr();
+					m_handle = IThread::StartNativeThread(Proxy, 0, &m_task_package);
+				}
+				//阻塞当前线程直到结束
+				void Join() {
+					IThread::WaitFor(m_handle, IThread::Infinite);
+				}
+				//分离
+				void Detach() {
+
+				}
+				//睡眠
+				static void Sleep(unsigned long Miliseconds){
+					IThread::SleepFor(Miliseconds);
+				}
+				~Thread() {
+					
+				}
+			};
+
+			//Task
 			template<class T>
-			class AsyncResult
-			{
-				UThread thread;
-				friend class Task;
-			public:
-				AsyncResult(UThread const&target_thread):thread(target_thread) {}
-				AsyncResult(AsyncResult const&rhs) = default;
-				AsyncResult&operator=(AsyncResult const&rhs) = default;
-				~AsyncResult() = default;
-			};
-
-			//异步返回值
-			template<>
-			class AsyncResult<void>
-			{
-				UThread thread;
-				friend class Task;
-			public:
-				AsyncResult(UThread const&target_thread) :thread(target_thread) {}
-				AsyncResult(AsyncResult const&rhs) = default;
-				AsyncResult&operator=(AsyncResult const&rhs) = default;
-				~AsyncResult() = default;
-			};
-
-			//多线程
 			class Task
 			{
+				UPointer::uptr<TaskPackage> m_task_package;
 			public:
-				template<class T>
-				static T Await(AsyncResult<T>const&result) {
-					if (result.thread.IsNull())
-						HL::Exception::Throw<HL::Exception::ArgumentNullException>();
-					result.thread->Join();
-					return result.thread->pack->async_ret;
+				Task(UPointer::uptr<TaskPackage> const& Target) :m_task_package(Target) {
 				}
-				template<class FirstT,class...Args>
-				static void WaitAll(FirstT const& first, Args const&...args) {
-					first.thread->Join();
-					WaitAll(args...);
+				//接着
+				template<class Functor>
+				UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> Then(Functor Target) {
+					m_task_package->CurrentThread->Join();
+					return Reference::newptr<Thread>(Functional::Bind(Target));
 				}
-				template<class FirstT>
-				static void WaitAll(FirstT const& first) {
-					first.thread->Join();
+				//等待返回异步结果
+				T Await() {
+					m_task_package->CurrentThread->Join();
+					return m_task_package->AsyncResult;
 				}
-				static void Await(AsyncResult<void> const&result) {
-					if (result.thread.IsNull())
-						HL::Exception::Throw<HL::Exception::ArgumentNullException>();
-					result.thread->Join();
+			};
+			template<>
+			class Task<void>
+			{
+				UPointer::uptr<TaskPackage> m_task_package;
+			public:
+				Task(UPointer::uptr<TaskPackage> const& Target) :m_task_package(Target) {
 				}
-				inline static void Delay(DWORD MilSec)
-				{
-					Sleep(MilSec);
+				//等待异步
+				void Await() {
+					m_task_package->CurrentThread->Join();
 				}
-				template<class T>
-				static uptr<Generic::Array<T>> Await(Iteration::IEnumerator<AsyncResult<T>>const& results)
-				{
-					auto ret = newptr<Generic::Array<T>>();
-					for (auto&result : results)
-						ret->Add(result);
-					return ret;
+				//接着
+				template<class Functor,class...Args>
+				UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> Then(Functor Target,Args const&...args) {
+					m_task_package->CurrentThread->Join();
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target), nullptr, params(args...));
+					GC::newgc<Thread>(package)->Go();
+					return Reference::newptr<Task<typename Template::GetFunctionInfo<Functor>::R>>(package);
+				}
+				//接着
+				template<class T,class...Args>
+				UPointer::uptr<Task<T>> Then(Functional::Delegate<Functional::Auto>const& Target, Args const&...args) {
+					m_task_package->CurrentThread->Join();
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, nullptr, params(args...));
+					GC::newgc<Thread>(package)->Go();
+					return Reference::newptr<Task<T>>(package);
+				}
+				//接着
+				template<class Functor,class TT,class...Args>
+				UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> ThenWith(Functor Target, TT*Object, Args const&...args) {
+					m_task_package->CurrentThread->Join();
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target, Object), nullptr, params(args...));
+					GC::newgc<Thread>(package)->Go();
+					return Reference::newptr<Task<typename Template::GetFunctionInfo<Functor>::R>>(package);
+				}
+				template<class T,class...Args>
+				UPointer::uptr<Task<T>> ThenWith(Functional::Delegate<Functional::Auto> const&Target, UPointer::uobject const&Object, Args const&...args) {
+					m_task_package->CurrentThread->Join();
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, Object, params(args...));
+					GC::newgc<Thread>(package)->Go();
+					return Reference::newptr<Task<T>>(package);
 				}
 				//异步执行
 				template<class T,class...Args>
-				static AsyncResult<T> Run(Functional::Delegate<Functional::Auto> const&target, Args const&...args) {
-					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(target, nullptr, params(args...));
-					Thr->Start();
-					return Thr;
+				static UPointer::uptr<Task<T>> Run(Functional::Delegate<Functional::Auto> const&Target, Args const&...args) {
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, nullptr, params(args...));
+					GC::newgc<Threading::Thread>(package)->Go();
+					return Reference::newptr<Task<T>>(package);
 				}
 				//异步执行
 				template<class T, class...Args>
-				static AsyncResult<T> RunWith(Functional::Delegate<Functional::Auto> const&target, UPointer::uobject const& object, Args const&...args) {
-					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(target, object, params(args...));
-					Thr->Start();
-					return Thr;
+				static UPointer::uptr<Task<T>> RunWith(Functional::Delegate<Functional::Auto> const&Target, UPointer::uobject const& Object, Args const&...args) {
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, Object, params(args...));
+					GC::newgc<Threading::Thread>(package)->Go();
+					return Reference::newptr<Task<T>>(package);
 				}
 				//异步执行
-				template<class...Args,class Functor>
-				static AsyncResult<typename Template::GetFunctionInfo<Functor>::R> Run(Functor fx, Args const&...args)
-				{
-					Functional::Delegate<Functional::Auto>Func = Functional::Bind(fx);
-					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(Func, nullptr, Functional::params(args...));
-					Thr->Start();
-					return Thr;
+				template<class Functor,class...Args>
+				static UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> Run(Functor Target,Args const&...args) {
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target), nullptr, params(args...));
+					GC::newgc<Threading::Thread>(package)->Go();
+					return Reference::newptr<Task<typename Template::GetFunctionInfo<Functor>::R>>(package);
 				}
 				//异步执行
-				template<class...Args, class TT, class Functor>
-				static AsyncResult<typename Template::GetFunctionInfo<Functor>::R> RunWith(Functor fx, TT*obj, Args const&...args)
-				{
-					Functional::Delegate<Functional::Auto>Func = Functional::Bind(fx, obj);
-					UPointer::uptr<Threading::Thread> Thr = GC::newgc<Threading::Thread>(Func, nullptr, Functional::params(args...));
-					Thr->Start();
-					return Thr;
+				template<class Functor,class TT,class...Args>
+				static UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> RunWith(Functor Target, TT*Object, Args const&...args) {
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target, Object), nullptr, params(args...));
+					GC::newgc<Threading::Thread>(package)->Go();
+					return Reference::newptr<Task<typename Template::GetFunctionInfo<Functor>::R>>(package);
 				}
-			};
 
+			};
 		}
 	}
 }

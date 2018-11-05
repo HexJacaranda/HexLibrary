@@ -96,13 +96,13 @@ namespace HL
 				JsonObject(ContainerT const&Pairs) :IJsonValue(JsonValueType::Object), m_pairs(Pairs) {}
 				JsonObject(ContainerT&& Pairs) :IJsonValue(JsonValueType::Object), m_pairs(Forward(Pairs)) {}
 				JsonObject(JsonObject const&rhs) :IJsonValue(JsonValueType::Object), m_pairs(rhs.m_pairs) {}
-				JsonObject(JsonObject &&lhs) :IJsonValue(JsonValueType::Object), m_pairs(Forward(lhs.m_pairs)) {}
+				JsonObject(JsonObject &&lhs)noexcept :IJsonValue(JsonValueType::Object), m_pairs(Forward(lhs.m_pairs)) {}
 				JsonObject&operator=(JsonObject const&rhs)
 				{
 					this->m_pairs = rhs.m_pairs;
 					return *this;
 				}
-				JsonObject&operator=(JsonObject&&lhs)
+				JsonObject&operator=(JsonObject&&lhs)noexcept
 				{
 					this->m_pairs = static_cast<ContainerT&&>(lhs.m_pairs);
 					return *this;
@@ -168,13 +168,13 @@ namespace HL
 				JsonArray(ContainerT const&list) :IJsonValue(JsonValueType::Array), m_list(list) {}
 				JsonArray(ContainerT &&list) :IJsonValue(JsonValueType::Array), m_list(Forward(list)) {}
 				JsonArray(JsonArray const&rhs) :IJsonValue(JsonValueType::Array), m_list(rhs.m_list) {}
-				JsonArray(JsonArray &&rhs) :IJsonValue(JsonValueType::Array), m_list(Forward(rhs.m_list)) {}
+				JsonArray(JsonArray &&rhs)noexcept :IJsonValue(JsonValueType::Array), m_list(Forward(rhs.m_list)) {}
 				JsonArray&operator=(JsonArray const&rhs)
 				{
 					this->m_list = rhs.m_list;
 					return *this;
 				}
-				JsonArray&operator=(JsonArray&&lhs)
+				JsonArray&operator=(JsonArray&&lhs)noexcept
 				{
 					this->m_list = static_cast<ContainerT&&>(lhs.m_list);
 					return *this;
@@ -226,14 +226,14 @@ namespace HL
 				JsonValue(String const&value, JsonValueType type) :IJsonValue(type), m_value(value) {}
 				JsonValue(double value_cache) :IJsonValue(JsonValueType::Number), m_value_cache(value_cache) {}
 				JsonValue(JsonValue const&rhs) :IJsonValue(rhs.m_value_type), m_value(rhs.m_value), m_value_cache(rhs.m_value_cache) {}
-				JsonValue(JsonValue &&lhs) :IJsonValue(lhs.m_value_type), m_value(Forward(lhs.m_value)), m_value_cache(lhs.m_value_cache) {}
+				JsonValue(JsonValue &&lhs)noexcept :IJsonValue(lhs.m_value_type), m_value(Forward(lhs.m_value)), m_value_cache(lhs.m_value_cache) {}
 				JsonValue&operator=(JsonValue const& rhs) {
 					this->m_value = rhs.m_value;
 					this->m_value_cache = rhs.m_value_cache;
 					this->m_value_type = rhs.m_value_type;
 					return *this;
 				}
-				JsonValue&operator=(JsonValue &&lhs) {
+				JsonValue&operator=(JsonValue &&lhs)noexcept {
 					this->m_value = static_cast<String&&>(lhs.m_value);
 					this->m_value_cache = lhs.m_value_cache;
 					this->m_value_type = lhs.m_value_type;

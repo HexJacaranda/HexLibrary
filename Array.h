@@ -154,7 +154,7 @@ namespace HL
 			public:
 				Array() :data(0) {}
 				Array(Array const&rhs) :data(rhs.data) {}
-				Array(Array &&lhs) :data(static_cast<ContainerT&&>(lhs.data)) {}
+				Array(Array &&lhs)noexcept :data(static_cast<ContainerT&&>(lhs.data)) {}
 				Array(ContainerT const&rhs) :data(rhs) {}
 				Array(ContainerT &&lhs) :data(static_cast<ContainerT&&>(lhs)) {}
 				Array(std::initializer_list<T>const&init_list) {

@@ -92,7 +92,7 @@ namespace HL
 
 			//智能指针统一化类型
 			template<class T>
-			class uptr sealed:public System::Hash::ISupportHash
+			class uptr:public System::Hash::ISupportHash
 			{
 				template<class U>friend class uptr;
 				template<class U>friend class weakuptr;
@@ -108,7 +108,7 @@ namespace HL
 				uptr(nullptr_t);
 				uptr(T*, uptr_resource*, uptr_resource_keeper*);
 				uptr(uptr const&);
-				uptr(uptr &&);
+				uptr(uptr &&)noexcept;
 				uptr&operator=(uptr const&);
 				uptr&operator=(uptr &&);
 				uptr&operator=(nullptr_t);
@@ -201,7 +201,7 @@ namespace HL
 			};
 
 			//智能指针封箱统一化类型
-			class uobject sealed:System::Hash::ISupportHash
+			class uobject:System::Hash::ISupportHash
 			{
 				template<class U>friend class uptr;
 				template<class U>friend class weakuptr;
@@ -216,7 +216,7 @@ namespace HL
 				uobject();
 				uobject(nullptr_t);
 				uobject(uobject const&);
-				uobject(uobject &&);
+				uobject(uobject &&)noexcept;
 				template<class U>
 				uobject(uptr<U> const&);
 				template<class U>
@@ -257,7 +257,7 @@ namespace HL
 
 			//弱智能指针
 			template<class T>
-			class weakuptr sealed
+			class weakuptr
 			{
 				uptr_resource_keeper*resource_keeper = nullptr;
 				uptr_resource*resource = nullptr;
@@ -269,7 +269,7 @@ namespace HL
 				weakuptr(nullptr_t);
 				weakuptr(uptr<T> const&);
 				weakuptr(weakuptr const&);
-				weakuptr(weakuptr&&);
+				weakuptr(weakuptr&&)noexcept;
 				weakuptr&operator=(nullptr_t);
 				weakuptr&operator=(uptr<T> const&);
 				weakuptr&operator=(weakuptr const&);
@@ -332,7 +332,7 @@ namespace HL
 			}
 
 			template<class T>
-			inline uptr<T>::uptr(uptr && lhs)
+			inline uptr<T>::uptr(uptr && lhs)noexcept
 			{
 				this->m_ptr = lhs.m_ptr;
 				this->resource_keeper = lhs.resource_keeper;
@@ -511,7 +511,7 @@ namespace HL
 				}
 			}
 
-			inline uobject::uobject(uobject &&lhs)
+			inline uobject::uobject(uobject &&lhs)noexcept
 			{
 				this->resource = lhs.resource;
 				this->m_ptr = lhs.m_ptr;
@@ -877,7 +877,7 @@ namespace HL
 				++this->resource->weak_reference_count;
 			}
 			template<class T>
-			inline weakuptr<T>::weakuptr(weakuptr &&lhs)
+			inline weakuptr<T>::weakuptr(weakuptr &&lhs)noexcept
 			{
 				this->m_ptr = lhs.m_ptr;
 				this->resource = lhs.resource;
