@@ -114,6 +114,8 @@ namespace HL
 				uptr&operator=(nullptr_t);
 				T*operator->();
 				T const*operator->()const;
+				T const* GetObjectPtr()const;
+				T* GetObjectPtr();
 				//将当前指针置空
 				void SetToNull();
 				//检查当前指针是否有效
@@ -274,6 +276,8 @@ namespace HL
 				weakuptr&operator=(uptr<T> const&);
 				weakuptr&operator=(weakuptr const&);
 				weakuptr&operator=(weakuptr&&);
+				T* GetObjectPtr();
+				T const* GetObjectPtr()const;
 				//检查指针持有的资源是否无效
 				bool IsInvalid()const;
 				void SetToNull();
@@ -397,6 +401,18 @@ namespace HL
 
 			template<class T>
 			inline T const * uptr<T>::operator->() const
+			{
+				return this->m_ptr;
+			}
+
+			template<class T>
+			inline T const * uptr<T>::GetObjectPtr() const
+			{
+				return this->m_ptr;
+			}
+
+			template<class T>
+			inline T * uptr<T>::GetObjectPtr()
 			{
 				return this->m_ptr;
 			}
@@ -954,6 +970,18 @@ namespace HL
 				lhs.resource_keeper = nullptr;
 				lhs.resource = nullptr;
 				return *this;
+			}
+
+			template<class T>
+			inline T * weakuptr<T>::GetObjectPtr()
+			{
+				return this->m_ptr;
+			}
+
+			template<class T>
+			inline T const * weakuptr<T>::GetObjectPtr() const
+			{
+				return this->m_ptr;
 			}
 
 

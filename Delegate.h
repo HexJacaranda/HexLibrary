@@ -153,12 +153,12 @@ namespace HL
 						else if (invoke_type == InvokeType::InvokeWithNativePtr)
 						{
 							uptr<Reference::IntPtr> ptr = object;
-							return Invoker::Invoke((TT*)(*ptr), target_function, params);
+							return Invoker::Invoke((TT*)*(ptr.GetObjectPtr()), target_function, params);
 						}
 						else if (invoke_type == InvokeType::InvokeWithUPtr)
 						{
 							uptr<TT> ptr = object;
-							return Invoker::Invoke(&(*ptr), target_function, params);
+							return Invoker::Invoke(ptr.GetObjectPtr(), target_function, params);
 						}
 						else
 							return nullptr;
