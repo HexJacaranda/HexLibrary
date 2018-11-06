@@ -126,7 +126,9 @@ namespace HL
 				if (m_max == 0)
 					m_max = (m_rank*count);
 				else
-					m_max *= m_rank;
+				{
+					m_max = m_rank * (m_max + count);
+				}
 			}
 			template<class T>
 			inline MemoryManager<T>::MemoryManager()
