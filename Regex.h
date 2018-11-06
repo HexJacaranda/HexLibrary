@@ -196,7 +196,7 @@ namespace HL
 					m_objects.Add((intptr_t)Target, Target);
 				}
 				void Remove(T*Target) {
-					m_objects.Add()
+					m_objects.Remove((intptr_t)Target);
 				}
 				inline T* Create() {
 					return new T;
@@ -213,8 +213,11 @@ namespace HL
 					m_objects.Add((intptr_t)ret, ret);
 					return ret;
 				}
-				auto GetEnumerator() {
-					return m_objects.GetEnumerator();
+				Generic::Dictionary<intptr_t, T*>&GetContainer() {
+					return this->m_objects;
+				}
+				Generic::Dictionary<intptr_t, T*> const&GetContainer()const {
+					return this->m_objects;
 				}
 				~Pool() {
 					for (auto&item : m_objects)
@@ -229,13 +232,20 @@ namespace HL
 				wchar_t m_first;
 			public:
 				ContentBase(wchar_t First, bool Not = false) :m_first(First), m_not(Not) {}
+				wchar_t First() {
+					return this->m_first;
+				}
 				//是否接受
 				virtual bool Accept(wchar_t Target) {
 					if (m_first == L'.')
 						return !m_not;
 					return Target == m_first && !m_not;
 				}
-				virtual ~ContentBase() {}
+				virtual ContentBase* Clone() {
+					return new ContentBase(m_first, m_not);
+				}
+				virtual ~ContentBase() {
+				}
 			};
 			//字符集
 			class CharRange :public ContentBase
@@ -244,9 +254,11 @@ namespace HL
 				wchar_t m_right;
 			public:
 				CharRange(wchar_t left, wchar_t right, bool not= false) :m_left(left), m_right(right), ContentBase(left, not) {}
-
 				virtual bool Accept(wchar_t Target) {
 					return (Target >= m_left && Target <= m_right) && !m_not;
+				}
+				virtual ContentBase* Clone() {
+					return new CharRange(m_left, m_right, m_not);
 				}
 				virtual ~CharRange() {}
 			};
@@ -273,7 +285,8 @@ namespace HL
 			public:
 				Generic::Array<Edge*> InEdges;
 				Generic::Array<Edge*> OutEdges;
-				bool Final;
+				bool Final = false;
+				bool Valid = false;
 			};
 			//资源
 			class Resource
@@ -330,6 +343,7 @@ namespace HL
 			class Parser
 			{
 				Tokenizer m_tokenizer;
+			public:
 				Resource*m_resource = new Resource();
 				//Parse字符集合
 				NFA* ParseSet() {
@@ -602,11 +616,70 @@ namespace HL
 				{
 					return ParseNFA(0, m_tokenizer.Count());
 				}
+				~Parser() {
+					if (m_resource != nullptr) {
+						delete m_resource;
+						m_resource = nullptr;
+					}
+				}
+			};
+
+			struct Closure
+			{
+				Status*Target;
+				Edge*ValidEdge;
 			};
 
 			class DFA
 			{
-
+			public:
+				static void MarkValidStatus(Pool<Status> &Target) {
+					for (auto&var : Target.GetContainer())
+					{
+						for (int i = 0; i < var.Value()->InEdges.Count(); ++i)
+						{
+							if (var.Value()->InEdges[i]->Content != nullptr)
+							{
+								var.Value()->Valid = true;
+								break;
+							}
+						}
+					}
+				}
+				static void GetClosure(Generic::Array<Closure>&Out, Status*Where) {
+					for (int i = 0; i < Where->OutEdges.Count(); i++) {
+						if (Where->OutEdges[i]->Content != nullptr/* || Where->OutEdges[i]->To->Final*/)
+						{
+							Closure closure;
+							closure.Target = Where->OutEdges[i]->To;
+							closure.ValidEdge = Where->OutEdges[i];
+							Out.Add(closure);
+						}
+						else
+							GetClosure(Out, Where->OutEdges[i]->To);
+					}
+				}
+				static DFA* FromNFA(Resource&Pool,NFA*Target) {
+					Target->Head->Valid = true;
+					Target->Tail->Valid = true;
+					Target->Tail->Final = true;
+					MarkValidStatus(Pool.StatusPool);
+					for (auto&var : Pool.StatusPool.GetContainer())
+					{
+						if (!var.Value()->Valid)
+							continue;
+						Generic::Array<Closure> closures;
+						GetClosure(closures, var.Value());
+						for (int i = 0; i < closures.Count(); ++i) {
+							Edge*edge = Pool.EdgePool.CreateAndAppend();
+							if (closures[i].ValidEdge->Content != nullptr)
+								edge->Content = closures[i].ValidEdge->Content->Clone();
+							Pool.ContentPool.Add(edge->Content);
+							NFA::Connect(edge, var.Value(), closures[i].Target);
+						}
+					}
+					return nullptr;
+				}
 			};
 		}
 	};
