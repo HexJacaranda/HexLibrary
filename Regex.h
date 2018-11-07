@@ -536,7 +536,6 @@ namespace HL
 							NFA::Connect(m_resource->EdgePool.CreateAndAppend(), mid->Tail, ret->Tail);//添加边连接起来
 							prev->Joint(mid);
 							prev = mid;
-							Max--;
 						}
 						tail = ParseNFA(Base, Top);
 						prev->Joint(tail);
