@@ -197,6 +197,7 @@ namespace HL
 				}
 				void Remove(T*Target) {
 					m_objects.Remove((intptr_t)Target);
+					delete Target;
 				}
 				inline T* Create() {
 					return new T;
@@ -277,6 +278,7 @@ namespace HL
 				Status*From;//起始状态
 				Status*To;//目标状态
 				ContentBase*Content;//匹配内容
+				bool Valid = true;
 				Generic::Array<Action*> Actions;//动作
 			};
 			//状态
@@ -287,6 +289,7 @@ namespace HL
 				Generic::Array<Edge*> OutEdges;
 				bool Final = false;
 				bool Valid = false;
+				bool Visited = false;
 			};
 			//资源
 			class Resource
@@ -326,10 +329,6 @@ namespace HL
 				void Parallel(NFA*Target) {
 					Connect(Resources->EdgePool.CreateAndAppend(), this->Head, Target->Head);
 					Connect(Resources->EdgePool.CreateAndAppend(), Target->Tail, this->Tail);
-				}
-				//构造重复匹配
-				void Repeat(NFA*Target, int Min, int Max) {
-
 				}
 				//用边将两个状态连接起来
 				static void Connect(Edge*ConnectEdge, Status*From, Status*To) {
@@ -457,7 +456,7 @@ namespace HL
 						case TokenType::Or://并联
 							node = ParseNFA(m_tokenizer.Position(), Top);
 							out->Parallel(node);//并联
-							break;
+							goto Again;
 						case TokenType::LBracket:
 							node = ParseSet(); //字符集
 							break;
@@ -479,14 +478,17 @@ namespace HL
 							}
 						}
 						case TokenType::RParen://右小括号，分组结束，退出SubParse
-							break;
+							goto Exit;
 						}
 						if (iter != nullptr)
 							NFA::Connect(m_resource->EdgePool.CreateAndAppend(), iter->Tail, node->Head);//除开第一次，进行前后连接
 						else
 							NFA::Connect(m_resource->EdgePool.CreateAndAppend(), out->Head, node->Head);//第一次进行头头连接
 						iter = node;
+					Again:
+						(void)0;
 					}
+				Exit:
 					NFA::Connect(m_resource->EdgePool.CreateAndAppend(), iter->Tail, out->Tail);//尾部相连
 					return out;
 				}
@@ -500,7 +502,10 @@ namespace HL
 					NFA*tail = nullptr;
 					NFA::Connect(m_resource->EdgePool.CreateAndAppend(), ret->Head, head->Head);
 					if (Min == 1)
+					{
 						NFA::Connect(m_resource->EdgePool.CreateAndAppend(), head->Tail, ret->Tail);
+						tail = head;
+					}
 					else if (Min > 1)
 					{
 						NFA*prev = head;
@@ -509,6 +514,7 @@ namespace HL
 							NFA*mid = ParseNFA(Base, Top);
 							prev->Joint(mid);
 							prev = mid;
+							Min--;
 						}
 						tail = ParseNFA(Base, Top);
 						prev->Joint(tail);
@@ -525,12 +531,13 @@ namespace HL
 					else
 					{
 						NFA*prev = tail;
-						while (Max - Min - 1 >= 0)//中间节点
+						while (Max - Min - 1 > 0)//中间节点
 						{
 							NFA*mid = ParseNFA(Base, Top);
 							NFA::Connect(m_resource->EdgePool.CreateAndAppend(), mid->Tail, ret->Tail);//添加边连接起来
 							prev->Joint(mid);
 							prev = mid;
+							Max--;
 						}
 						tail = ParseNFA(Base, Top);
 						prev->Joint(tail);
@@ -568,11 +575,13 @@ namespace HL
 						}
 						else if (token.Type == TokenType::Comma)//逗号检查
 						{
-							right_count = StringFunction::IntSniff(token.Begin + 1);
+							m_tokenizer.Consume(token);
+							right_count = StringFunction::IntSniff(token.Begin);
 							if (right_count > 0)
-								right = StringFunction::StringToInt<int>(token.Begin + 1, right_count);
+								right = StringFunction::StringToInt<int>(token.Begin, right_count);
 							else//如果没有数字，就是上限不限
 								right = -1;
+							m_tokenizer.Move(right_count - 1);
 							m_tokenizer.Consume(token);
 							Offset += right_count + 1;
 							if (token.Type != TokenType::RCurly)//右花括号检查
@@ -636,7 +645,7 @@ namespace HL
 				static void MarkValidStatus(Pool<Status> &Target) {
 					for (auto&var : Target.GetContainer())
 					{
-						for (int i = 0; i < var.Value()->InEdges.Count(); ++i)
+						for (index_t i = 0; i < var.Value()->InEdges.Count(); ++i)
 						{
 							if (var.Value()->InEdges[i]->Content != nullptr)
 							{
@@ -646,23 +655,51 @@ namespace HL
 						}
 					}
 				}
-				static void GetClosure(Generic::Array<Closure>&Out, Status*Where) {
-					for (int i = 0; i < Where->OutEdges.Count(); i++) {
-						if (Where->OutEdges[i]->Content != nullptr/* || Where->OutEdges[i]->To->Final*/)
+				//获得状态的所有Depth超过1的闭包(若要指定所有的包将Depth设置为-1
+				static void GetClosure(Generic::Array<Closure>&Out, Status*Where, index_t Depth = 0) {
+					for (index_t i = 0; i < Where->OutEdges.Count(); i++) {
+						if (Where->OutEdges[i]->Content != nullptr || Where->OutEdges[i]->To->Final)
 						{
+							if (Depth < 1)
+								continue;
 							Closure closure;
 							closure.Target = Where->OutEdges[i]->To;
 							closure.ValidEdge = Where->OutEdges[i];
 							Out.Add(closure);
 						}
 						else
-							GetClosure(Out, Where->OutEdges[i]->To);
+						{
+							Where->OutEdges[i]->Valid = false;
+							GetClosure(Out, Where->OutEdges[i]->To, ++Depth);
+						}
 					}
 				}
+				static void RemoveInvalidStatusAndEdges(Resource&Re) {
+					for (auto&var : Re.StatusPool.GetContainer()) 
+					{
+						if (var.Value()->Valid)
+						{
+							index_t offset = 0;
+							for (index_t i = 0; i < var.Value()->OutEdges.Count(); ++i) {
+								if (!var.Value()->OutEdges[i + offset]->Valid)
+								{
+									var.Value()->OutEdges.RemoveAt(i + offset);
+									offset--;
+								}
+							}
+						}
+						else
+							Re.StatusPool.Remove(var.Value());
+					}
+					for (auto&var : Re.EdgePool.GetContainer()) {
+						if (!var.Value()->Valid)
+							Re.EdgePool.Remove(var.Value());
+					}
+					//for (auto&var : Re.NFAPool.GetContainer()) {
+					//	Re.NFAPool.Remove(var.Value());
+					//}
+				}
 				static DFA* FromNFA(Resource&Pool,NFA*Target) {
-					Target->Head->Valid = true;
-					Target->Tail->Valid = true;
-					Target->Tail->Final = true;
 					MarkValidStatus(Pool.StatusPool);
 					for (auto&var : Pool.StatusPool.GetContainer())
 					{
@@ -670,14 +707,19 @@ namespace HL
 							continue;
 						Generic::Array<Closure> closures;
 						GetClosure(closures, var.Value());
-						for (int i = 0; i < closures.Count(); ++i) {
+						for (index_t i = 0; i < closures.Count(); ++i) {
+							index_t index = closures[i].Target->InEdges.IndexOf(closures[i].ValidEdge);
+							if (index >= 0)
+								closures[i].Target->InEdges.RemoveAt(index);
 							Edge*edge = Pool.EdgePool.CreateAndAppend();
 							if (closures[i].ValidEdge->Content != nullptr)
 								edge->Content = closures[i].ValidEdge->Content->Clone();
-							Pool.ContentPool.Add(edge->Content);
+							if (edge->Content != nullptr)
+								Pool.ContentPool.Add(edge->Content);
 							NFA::Connect(edge, var.Value(), closures[i].Target);
 						}
 					}
+					RemoveInvalidStatusAndEdges(Pool);
 					return nullptr;
 				}
 			};
