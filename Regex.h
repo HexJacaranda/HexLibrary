@@ -509,12 +509,11 @@ namespace HL
 					else if (Min > 1)
 					{
 						NFA*prev = head;
-						while (Min - 2 >= 0)//中间节点
+						for (index_t i = Min - 2; i > 0; i--)//中间节点
 						{
 							NFA*mid = ParseNFA(Base, Top);
 							prev->Joint(mid);
 							prev = mid;
-							Min--;
 						}
 						tail = ParseNFA(Base, Top);
 						prev->Joint(tail);
@@ -531,7 +530,7 @@ namespace HL
 					else
 					{
 						NFA*prev = tail;
-						while (Max - Min - 1 > 0)//中间节点
+						for (index_t i = Max - Min - 1; i > 0; --i)//中间节点
 						{
 							NFA*mid = ParseNFA(Base, Top);
 							NFA::Connect(m_resource->EdgePool.CreateAndAppend(), mid->Tail, ret->Tail);//添加边连接起来
