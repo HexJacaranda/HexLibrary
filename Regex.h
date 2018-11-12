@@ -274,21 +274,32 @@ namespace HL
 			class Edge
 			{
 			public:
-				Edge() :From(nullptr), To(nullptr), Content(nullptr) {}
-				Status*From;//起始状态
-				Status*To;//目标状态
-				ContentBase*Content;//匹配内容
+				//起始状态
+				Status*From = nullptr;
+				//目标状态
+				Status*To = nullptr;
+				//匹配内容
+				ContentBase*Content = nullptr;
+				//是否有效
 				bool Valid = true;
-				Generic::Array<Action*> Actions;//动作
+				//是否为自环边
+				bool LoopEdge = false;
+				//动作
+				Generic::Array<Action*> Actions;
 			};
 			//状态
 			class Status
 			{
 			public:
+				//进入状态的边
 				Generic::Array<Edge*> InEdges;
+				//出去的边
 				Generic::Array<Edge*> OutEdges;
+				//是否是结束状态
 				bool Final = false;
+				//是否有效
 				bool Valid = false;
+				//是否访问过(用于Debug
 				bool Visited = false;
 			};
 			//资源
@@ -420,11 +431,11 @@ namespace HL
 					}
 					return nullptr;//预期在结束前返回
 				}
-				//[Base,Top)区间进行Parse
-				NFA* ParseNFA(index_t Base, index_t Top)
+				//[Base,Top)区间进行Parse,ParallelBreak指示是否对并联进行截断
+				NFA* ParseNFA(index_t Base, index_t Top, bool ParallelBreak = false)
 				{
 					m_tokenizer.Position(Base);//定位
-
+					bool successive = false;//并联
 					NFA* out = m_resource->NFAPool.CreateAndAppend(m_resource);
 					out->BuildNode(nullptr);
 					NFA* iter = nullptr;
@@ -440,23 +451,36 @@ namespace HL
 						{
 							node = m_resource->NFAPool.CreateAndAppend(m_resource);//单字符NFA创建
 							node->BuildNode(m_resource->ContentPool.CreateAndAppend(*token.Begin));
-							if (m_tokenizer.Position() + 1 < Top)//Peek边界检查
+							if (m_tokenizer.Position() < Top)//Peek边界检查
 							{
 								index_t offset = 0;
 								index_t current = m_tokenizer.Position();
-								NFA*suffix = Suffix(current - 1, current, offset);
+								NFA*suffix = Suffix(node, current - 1, current, offset);
 								if (suffix != nullptr)//后缀捕获成功
 								{
 									node = suffix;
 									m_tokenizer.Position(current + offset);//重新定位
 								}
 							}
+							else if (successive)//并联扫尾工作
+							{
+
+								goto Exit;
+							}
 							break;
 						}
 						case TokenType::Or://并联
-							node = ParseNFA(m_tokenizer.Position(), Top);
-							out->Parallel(node);//并联
-							goto Again;
+							if (ParallelBreak)
+							{
+								m_tokenizer.Move(-1);
+								goto Exit;
+							}
+							successive = true;
+							NFA::Connect(NewEdge(), iter->Tail, out->Tail);//上一个子NFA尾部仍处于悬垂状态,将其连接
+							node = ParseNFA(m_tokenizer.Position(), Top, true);
+							NFA::Connect(NewEdge(), out->Head, node->Head);
+							iter = node;
+							continue;
 						case TokenType::LBracket:
 							node = ParseSet(); //字符集
 							break;
@@ -465,50 +489,52 @@ namespace HL
 							index_t before = m_tokenizer.Position();
 							node = ParseNFA(m_tokenizer.Position(), Top);
 							index_t after = m_tokenizer.Position();
-							if (m_tokenizer.Position() + 1 < Top)//Peek边界检查
+							if (m_tokenizer.Position() < Top)//Peek边界检查
 							{
 								index_t offset = 0;
-								NFA*suffix = Suffix(before, after, offset);
+								NFA*suffix = Suffix(node, before, after, offset);
 								if (suffix != nullptr)
 								{
 									node = suffix;
 									m_tokenizer.Position(after + offset);//重新定位
 								}
-								break;
 							}
+							else if (successive)
+								goto Exit;
+							break;
 						}
 						case TokenType::RParen://右小括号，分组结束，退出SubParse
+							if (ParallelBreak)
+								m_tokenizer.Move(-1);
 							goto Exit;
 						}
 						if (iter != nullptr)
-							NFA::Connect(m_resource->EdgePool.CreateAndAppend(), iter->Tail, node->Head);//除开第一次，进行前后连接
+							NFA::Connect(NewEdge(), iter->Tail, node->Head);//除开第一次，进行前后连接
 						else
-							NFA::Connect(m_resource->EdgePool.CreateAndAppend(), out->Head, node->Head);//第一次进行头头连接
+							NFA::Connect(NewEdge(), out->Head, node->Head);//第一次进行头头连接
 						iter = node;
-					Again:
-						(void)0;
 					}
 				Exit:
-					NFA::Connect(m_resource->EdgePool.CreateAndAppend(), iter->Tail, out->Tail);//尾部相连
+					NFA::Connect(NewEdge(), iter->Tail, out->Tail);//尾部相连
 					return out;
 				}
 				//反复
-				NFA* Repeat(index_t Base,index_t Top, int Min, int Max)
+				NFA* Repeat(NFA*Parsed,index_t Base,index_t Top, int Min, int Max)
 				{
 					NFA*ret = m_resource->NFAPool.CreateAndAppend(m_resource);
 					ret->BuildNode(nullptr);
-					//处理头
-					NFA*head = ParseNFA(Base, Top);
 					NFA*tail = nullptr;
-					NFA::Connect(m_resource->EdgePool.CreateAndAppend(), ret->Head, head->Head);
 					if (Min == 1)
 					{
-						NFA::Connect(m_resource->EdgePool.CreateAndAppend(), head->Tail, ret->Tail);
-						tail = head;
+						NFA* node = Parsed;
+						NFA::Connect(NewEdge(), ret->Head, node->Head);
+						tail = node;
 					}
 					else if (Min > 1)
 					{
-						NFA*prev = head;
+						NFA* node = Parsed;
+						NFA::Connect(NewEdge(), ret->Head, node->Head);
+						NFA*prev = node;
 						for (index_t i = Min - 2; i > 0; i--)//中间节点
 						{
 							NFA*mid = ParseNFA(Base, Top);
@@ -517,34 +543,62 @@ namespace HL
 						}
 						tail = ParseNFA(Base, Top);
 						prev->Joint(tail);
-						NFA::Connect(m_resource->EdgePool.CreateAndAppend(), tail->Tail, ret->Tail);
 					}
-					else//零次
-						tail = head;
-					//无限循环
-					if (Max == -1)
+
+					if (Max - Min == 1)
 					{
-						NFA::Connect(m_resource->EdgePool.CreateAndAppend(), tail->Tail, tail->Head);//自环
-						NFA::Connect(m_resource->EdgePool.CreateAndAppend(), tail->Tail, ret->Tail);//指向结尾
+
+						NFA*node = Parsed;
+						if (Min > 0)
+							node = ParseNFA(Base, Top);
+						if (tail == nullptr)
+							NFA::Connect(NewEdge(), ret->Head, node->Head);
+						else
+							tail->Joint(node);
+						NFA::Connect(NewEdge(), node->Head, ret->Tail);//可跳过
+						NFA::Connect(NewEdge(), node->Tail, ret->Tail);//结尾连接
 					}
-					else
+					else if (Max == -1)
 					{
-						NFA*prev = tail;
-						for (index_t i = Max - Min - 1; i > 0; --i)//中间节点
+						NFA*node = Parsed;
+						if (Min > 0)
+							node = ParseNFA(Base, Top);
+						Status*hollow =NewStatus();
+						NFA::Connect(NewEdge(), hollow, node->Head);
+						NFA::Connect(NewEdge(), node->Tail, hollow);
+						if (tail == nullptr)
+							NFA::Connect(NewEdge(), ret->Head, hollow);
+						else
+							NFA::Connect(NewEdge(), tail->Tail, hollow);
+						NFA::Connect(NewEdge(), hollow, ret->Tail);//结尾连接
+					}
+					else if (Max - Min > 1)
+					{
+						NFA*node = Parsed;
+						if (Min > 0)
+							node = ParseNFA(Base, Top);
+						if (tail == nullptr)
+							NFA::Connect(NewEdge(), ret->Head, node->Head);
+						else
+							tail->Joint(node);
+						NFA::Connect(NewEdge(), node->Head, ret->Tail);//可跳过
+						NFA*prev = node;
+						for (index_t i = Max - Min - 2; i > 0; i--)//中间节点
 						{
 							NFA*mid = ParseNFA(Base, Top);
-							NFA::Connect(m_resource->EdgePool.CreateAndAppend(), mid->Tail, ret->Tail);//添加边连接起来
+							NFA::Connect(NewEdge(), mid->Head, ret->Tail);//可跳过
 							prev->Joint(mid);
 							prev = mid;
 						}
 						tail = ParseNFA(Base, Top);
 						prev->Joint(tail);
-						NFA::Connect(m_resource->EdgePool.CreateAndAppend(), tail->Tail, ret->Tail);//指向结尾
+						NFA::Connect(NewEdge(), tail->Head, ret->Tail);//可跳过
+						NFA::Connect(NewEdge(), tail->Tail, ret->Tail);//结尾连接
 					}
 					return ret;
 				}
 				//Parse后缀
-				NFA* Suffix(index_t Base, index_t Top, index_t&Offset)
+				NFA* Suffix(NFA*Parsed,index_t Base, index_t Top, index_t&Offset)
 				{
 					NFA*ret = nullptr;
 					int left = 0;
@@ -609,12 +663,20 @@ namespace HL
 						m_tokenizer.Move(-1);
 						return nullptr;
 					}
-					ret = Repeat(Base, Top, left, right);
+					ret = Repeat(Parsed, Base, Top, left, right);
 					return ret;
 				}
 				//Parse前缀
 				NFA* Prefix() {
 					//TODO (功能边，例如捕获，后期完成
+				}
+
+				inline Edge* NewEdge() {
+					return m_resource->EdgePool.CreateAndAppend();
+				}
+
+				inline Status* NewStatus() {
+					return m_resource->StatusPool.CreateAndAppend();
 				}
 			public:
 				Parser(String const&Source) :m_tokenizer(Source.GetData(), Source.Count()) {}
@@ -637,7 +699,7 @@ namespace HL
 				Edge*ValidEdge;
 			};
 
-			class DFA
+			class NFASimplify
 			{
 			public:
 				static void MarkValidStatus(Pool<Status> &Target) {
@@ -645,7 +707,8 @@ namespace HL
 					{
 						for (index_t i = 0; i < var.Value()->InEdges.Count(); ++i)
 						{
-							if (var.Value()->InEdges[i]->Content != nullptr)
+							if (var.Value()->InEdges[i]->Content != nullptr
+								|| var.Value()->InEdges[i]->LoopEdge)
 							{
 								var.Value()->Valid = true;
 								break;
@@ -656,7 +719,8 @@ namespace HL
 				//获得状态的所有Depth超过1的闭包(若要指定所有的包将Depth设置为-1
 				static void GetClosure(Generic::Array<Closure>&Out, Status*Where, index_t Depth = 0) {
 					for (index_t i = 0; i < Where->OutEdges.Count(); i++) {
-						if (Where->OutEdges[i]->Content != nullptr || Where->OutEdges[i]->To->Final)
+						if (Where->OutEdges[i]->Content != nullptr
+							|| Where->OutEdges[i]->To->Final)
 						{
 							if (Depth < 1)
 								continue;
@@ -668,7 +732,7 @@ namespace HL
 						else
 						{
 							Where->OutEdges[i]->Valid = false;
-							GetClosure(Out, Where->OutEdges[i]->To, ++Depth);
+							GetClosure(Out, Where->OutEdges[i]->To, Depth + 1);
 						}
 					}
 				}
@@ -693,11 +757,8 @@ namespace HL
 						if (!var.Value()->Valid)
 							Re.EdgePool.Remove(var.Value());
 					}
-					//for (auto&var : Re.NFAPool.GetContainer()) {
-					//	Re.NFAPool.Remove(var.Value());
-					//}
 				}
-				static DFA* FromNFA(Resource&Pool,NFA*Target) {
+				static NFA* SimplifyNFA(Resource&Pool,NFA*Target) {
 					MarkValidStatus(Pool.StatusPool);
 					for (auto&var : Pool.StatusPool.GetContainer())
 					{
@@ -708,12 +769,14 @@ namespace HL
 						for (index_t i = 0; i < closures.Count(); ++i) {
 							index_t index = closures[i].Target->InEdges.IndexOf(closures[i].ValidEdge);
 							if (index >= 0)
-								closures[i].Target->InEdges.RemoveAt(index);
+								closures[i].Target->InEdges[index]->Valid = false;
 							Edge*edge = Pool.EdgePool.CreateAndAppend();
 							if (closures[i].ValidEdge->Content != nullptr)
 								edge->Content = closures[i].ValidEdge->Content->Clone();
 							if (edge->Content != nullptr)
 								Pool.ContentPool.Add(edge->Content);
+							if (closures[i].Target == var.Value())
+								edge->LoopEdge = true;//记录Loop边
 							NFA::Connect(edge, var.Value(), closures[i].Target);
 						}
 					}
