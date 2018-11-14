@@ -303,7 +303,7 @@ namespace HL
 				bool Visited = false;
 			};
 			//资源
-			class Resource
+			class NFAResource
 			{
 			public:
 				Pool<NFA> NFAPool;
@@ -314,9 +314,9 @@ namespace HL
 			//NFA状态机
 			class NFA
 			{
-				Resource*Resources;
+				NFAResource*Resources;
 			public:
-				NFA(Resource*Origin) :Resources(Origin), Head(nullptr), Tail(nullptr) {}
+				NFA(NFAResource*Origin) :Resources(Origin), Head(nullptr), Tail(nullptr) {}
 				NFA() :Head(nullptr), Tail(nullptr) {}
 				Status*Head;
 				Status*Tail;
@@ -353,8 +353,8 @@ namespace HL
 			class Parser
 			{
 				Tokenizer m_tokenizer;
-			public:
-				Resource*m_resource = new Resource();
+				NFAResource*m_resource = nullptr;
+			private:
 				//Parse字符集合
 				NFA* ParseSet() {
 					NFA* out = m_resource->NFAPool.CreateAndAppend(m_resource);
@@ -670,38 +670,34 @@ namespace HL
 				NFA* Prefix() {
 					//TODO (功能边，例如捕获，后期完成
 				}
-
+				//空边
 				inline Edge* NewEdge() {
 					return m_resource->EdgePool.CreateAndAppend();
 				}
-
+				//新状态
 				inline Status* NewStatus() {
 					return m_resource->StatusPool.CreateAndAppend();
 				}
 			public:
-				Parser(String const&Source) :m_tokenizer(Source.GetData(), Source.Count()) {}
-				Parser(wchar_t const* Source, size_t Size) :m_tokenizer(Source, Size) {}
-				NFA* Parse()
+				Parser(String const&Source,NFAResource*Resource) :m_tokenizer(Source.GetData(), Source.Count()),m_resource(Resource) {}
+				Parser(wchar_t const* Source, size_t Size, NFAResource*Resource) :m_tokenizer(Source, Size), m_resource(Resource) {}
+				inline NFA* Parse()
 				{
 					return ParseNFA(0, m_tokenizer.Count());
 				}
-				~Parser() {
-					if (m_resource != nullptr) {
-						delete m_resource;
-						m_resource = nullptr;
-					}
-				}
+				~Parser() {}
 			};
-
+			//闭包
 			struct Closure
 			{
 				Status*Target;
 				Edge*ValidEdge;
 			};
-
+			//NFA简化
 			class NFASimplify
 			{
 			public:
+				//标记所有有效状态
 				static void MarkValidStatus(Pool<Status> &Target) {
 					for (auto&var : Target.GetContainer())
 					{
@@ -736,8 +732,9 @@ namespace HL
 						}
 					}
 				}
-				static void RemoveInvalidStatusAndEdges(Resource&Re) {
-					for (auto&var : Re.StatusPool.GetContainer()) 
+				//移除无效边与状态
+				static void RemoveInvalidStatusAndEdges(NFAResource*Re) {
+					for (auto&var : Re->StatusPool.GetContainer()) 
 					{
 						if (var.Value()->Valid)
 						{
@@ -751,16 +748,17 @@ namespace HL
 							}
 						}
 						else
-							Re.StatusPool.Remove(var.Value());
+							Re->StatusPool.Remove(var.Value());
 					}
-					for (auto&var : Re.EdgePool.GetContainer()) {
+					for (auto&var : Re->EdgePool.GetContainer()) {
 						if (!var.Value()->Valid)
-							Re.EdgePool.Remove(var.Value());
+							Re->EdgePool.Remove(var.Value());
 					}
 				}
-				static NFA* SimplifyNFA(Resource&Pool,NFA*Target) {
-					MarkValidStatus(Pool.StatusPool);
-					for (auto&var : Pool.StatusPool.GetContainer())
+				//简化NFA
+				static NFA* SimplifyNFA(NFAResource*Pool,NFA*Target) {
+					MarkValidStatus(Pool->StatusPool);
+					for (auto&var : Pool->StatusPool.GetContainer())
 					{
 						if (!var.Value()->Valid)
 							continue;
@@ -770,11 +768,11 @@ namespace HL
 							index_t index = closures[i].Target->InEdges.IndexOf(closures[i].ValidEdge);
 							if (index >= 0)
 								closures[i].Target->InEdges[index]->Valid = false;
-							Edge*edge = Pool.EdgePool.CreateAndAppend();
+							Edge*edge = Pool->EdgePool.CreateAndAppend();
 							if (closures[i].ValidEdge->Content != nullptr)
 								edge->Content = closures[i].ValidEdge->Content->Clone();
 							if (edge->Content != nullptr)
-								Pool.ContentPool.Add(edge->Content);
+								Pool->ContentPool.Add(edge->Content);
 							if (closures[i].Target == var.Value())
 								edge->LoopEdge = true;//记录Loop边
 							NFA::Connect(edge, var.Value(), closures[i].Target);
@@ -782,6 +780,69 @@ namespace HL
 					}
 					RemoveInvalidStatusAndEdges(Pool);
 					return nullptr;
+				}
+			};
+			//NFA匹配
+			class NFAMatch
+			{
+			public:
+				static bool Match(const wchar_t*Target, const wchar_t*Top, Status*Where) {
+					if (Where->Final)//检查是否到达最终状态
+						return Target == Top;
+					if (Where->OutEdges.Count() == 1)
+					{
+						//单分支进行直接迭代
+						Status* iter = Where;
+						while (iter->OutEdges.Count() == 1) {
+							if (iter->OutEdges[0]->Content != nullptr)
+							{
+								if (!iter->OutEdges[0]->Content->Accept(*Target))
+									return false;
+								Target++;
+							}
+							iter = iter->OutEdges[0]->To;
+							if (iter->Final)
+								return Target == Top;
+						}
+						return Match(Target, Top, iter);
+					}
+					else
+					{
+						//多分枝
+						for (index_t i = 0; i < Where->OutEdges.Count(); ++i) {
+							if (Where->OutEdges[i]->Content == nullptr || Where->OutEdges[i]->Content->Accept(*Target))
+								if (Match(Target + 1, Top, Where->OutEdges[i]->To))
+									return true;
+						}
+						return false;
+					}
+				}
+			};
+			
+			//正则表达式
+			class Regex
+			{
+				String m_pattern;
+				NFA* m_enter = nullptr;
+				NFAResource * m_resource = nullptr;
+			public:
+				Regex(String const&Pattern) :m_pattern(Pattern),m_resource(new NFAResource) {
+					Parser parser(m_pattern, m_resource);
+					m_enter = parser.Parse();
+					m_enter->Head->Valid = true;
+					m_enter->Tail->Valid = true;
+					m_enter->Tail->Final = true;
+					NFASimplify::SimplifyNFA(m_resource, m_enter);
+				}
+				inline bool Match(String const&Target) {
+					return NFAMatch::Match(Target.GetData(), Target.GetData() + Target.Count(), m_enter->Head);
+				}
+				~Regex() {
+					if (m_enter != nullptr)m_enter = nullptr;
+					if (m_resource != nullptr) {
+						delete m_resource;
+						m_resource = nullptr;
+					}
 				}
 			};
 		}
