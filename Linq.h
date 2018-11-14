@@ -76,10 +76,10 @@ namespace HL
 
 			//连接迭代器
 			template<class FirstT, class SecondT, class Functor>
-			class JoinEnumerator :public Iteration::IEnumerator<Generic::KeyValuePair<FirstT, SecondT>>
+			class JoinEnumerator :public Iteration::IEnumerator<Generic::ObservePair<FirstT, SecondT>>
 			{
 			public:
-				typedef Generic::KeyValuePair<FirstT, SecondT> T;
+				typedef Generic::ObservePair<FirstT, SecondT> T;
 				typedef Iteration::IEnumerator<T> Base;
 			private:
 				T m_current;
@@ -208,8 +208,8 @@ namespace HL
 				}
 				//联合
 				template<class SecondT, class Functor>
-				uptr<LinqQueryResult<Generic::KeyValuePair<T, SecondT>>> Join(Iteration::IEnumerable<SecondT> const&Another, Functor const&Target)const {
-					return newptr<LinqQueryResult<Generic::KeyValuePair<T, SecondT>>>(
+				uptr<LinqQueryResult<Generic::ObservePair<T, SecondT>>> Join(Iteration::IEnumerable<SecondT> const&Another, Functor const&Target)const {
+					return newptr<LinqQueryResult<Generic::ObservePair<T, SecondT>>>(
 						newptr<JoinEnumerator<T, SecondT, Functor>>(this->GetEnumerator(), Another.GetEnumerator(), Target)
 						);
 				}

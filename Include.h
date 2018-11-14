@@ -24,6 +24,7 @@
 #include "Lock.h"
 #include "UnifiedPtr.h"
 #include "Ptr.h"
+#include "ObservePair.h"
 #include "Iterator.h"
 #include "Linq.h"
 #include "Array.h"

@@ -57,8 +57,8 @@ namespace HL
 		template<>
 		struct Interface::EnumerableSupportInterface<Json::JsonObject>
 		{
-			typedef UPointer::uptr<Iteration::Iterator<Generic::KeyValuePair<String, Json::UIJsonValue>>> IteratorType;
-			typedef UPointer::uptr<Iteration::Iterator<Generic::KeyValuePair<String, Json::UIJsonValue const>>> ConstIteratorType;
+			typedef UPointer::uptr<Iteration::Iterator<Generic::ObservePair<String, Json::UIJsonValue>>> IteratorType;
+			typedef UPointer::uptr<Iteration::Iterator<Generic::ObservePair<String, Json::UIJsonValue const>>> ConstIteratorType;
 		};
 
 		namespace Json
@@ -85,7 +85,7 @@ namespace HL
 				virtual ~IJsonValue() {}
 			};
 			//Json∂‘œÛ
-			class JsonObject :public IJsonValue, public Linq::LinqBase<Generic::KeyValuePair<String, UIJsonValue>>
+			class JsonObject :public IJsonValue, public Linq::LinqBase<Generic::ObservePair<String, UIJsonValue>>
 			{
 			public:
 				typedef Generic::Dictionary<String, UIJsonValue> ContainerT;
@@ -151,7 +151,7 @@ namespace HL
 				void Remove(String const&Key) {
 					this->m_pairs.Remove(Key);
 				}
-				virtual UPointer::uptr<Iteration::IEnumerator<Generic::KeyValuePair<String, UIJsonValue>>> GetEnumerator()const {
+				virtual UPointer::uptr<Iteration::IEnumerator<Generic::ObservePair<String, UIJsonValue>>> GetEnumerator()const {
 					return m_pairs.GetEnumerator();
 				}
 				virtual ~JsonObject() = default;

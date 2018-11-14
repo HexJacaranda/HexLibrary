@@ -54,7 +54,7 @@ namespace HL
 		{
 			Idle,
 			OnRegularCollecting,
-			OnOnceCollection,
+			OnOnceCollecting,
 			Exiting
 		};
 		//»ØÊÕÆ÷
@@ -86,7 +86,7 @@ namespace HL
 					return;
 				if (!m_change_flag.load(std::memory_order_acquire))
 					return;
-				InternalCollect(GCStatus::OnOnceCollection);
+				InternalCollect(GCStatus::OnOnceCollecting);
 			}
 			void RegularScan() {
 				for (;;)

@@ -127,11 +127,11 @@ namespace HL
 				};
 			}
 			template<class TKey, class TValue>
-			class DictionaryEnumerator :public Iteration::IEnumerator<KeyValuePair<TKey,TValue>>
+			class DictionaryEnumerator :public Iteration::IEnumerator<ObservePair<TKey,TValue>>
 			{
 				typedef Inner::EntryPair<TKey, TValue> Entry;
-				typedef Iteration::IEnumerator<KeyValuePair<TKey, TValue>> Base;
-				typedef KeyValuePair<TKey, TValue> T;
+				typedef Iteration::IEnumerator<ObservePair<TKey, TValue>> Base;
+				typedef ObservePair<TKey, TValue> T;
 				T m_current;
 				Entry * m_iter;
 				Entry * m_end;
@@ -145,7 +145,8 @@ namespace HL
 					{	
 						if (m_iter->Hash > 0)
 						{
-							m_current.Set(*m_iter->Key, *m_iter->Value);
+							m_current.Key(*m_iter->Key);
+							m_current.Value(*m_iter->Value);
 							m_iter++;
 							return Iteration::EnumerationResult::Successful;
 						}
@@ -166,7 +167,7 @@ namespace HL
 
 			//×ÖµäÈÝÆ÷
 			template<class TKey, class TValue>
-			class Dictionary sealed :public IDictionary<TKey, TValue>, public System::Interface::ICloneable,public Linq::LinqBase<KeyValuePair<TKey, TValue>>
+			class Dictionary sealed :public IDictionary<TKey, TValue>, public System::Interface::ICloneable,public Linq::LinqBase<ObservePair<TKey, TValue>>
 			{
 				template<class AnyT>
 				static atomic_type InnerGetHashCode(AnyT const&key) {
@@ -378,7 +379,7 @@ namespace HL
 				virtual void* ClonePtr()const final{
 					return new Dictionary(*this);
 				}
-				virtual uptr<Iteration::IEnumerator<KeyValuePair<TKey, TValue>>> GetEnumerator()const {
+				virtual uptr<Iteration::IEnumerator<ObservePair<TKey, TValue>>> GetEnumerator()const {
 					return newptr<DictionaryEnumerator<TKey, TValue>>(
 						const_cast<Entry*>(this->m_entries.GetData()), const_cast<Entry*>(this->m_entries.GetData() + this->m_entries.Count())
 						);
@@ -400,8 +401,8 @@ namespace HL
 		template<class TKey, class TValue>
 		struct Interface::EnumerableSupportInterface<Generic::Dictionary<TKey, TValue>>
 		{
-			typedef uptr<Iteration::Iterator<Generic::KeyValuePair<TKey, TValue>>> IteratorType;
-			typedef uptr<Iteration::Iterator<Generic::KeyValuePair<TKey, TValue const>>> ConstIteratorType;
+			typedef uptr<Iteration::Iterator<Generic::ObservePair<TKey, TValue>>> IteratorType;
+			typedef uptr<Iteration::Iterator<Generic::ObservePair<TKey, TValue const>>> ConstIteratorType;
 		};
 	}
 }

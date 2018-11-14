@@ -19,36 +19,7 @@ namespace HL
 		using uobject = UPointer::uobject;
 		namespace Generic
 		{
-			template<class TKey, class TValue>
-			class KeyValuePair
-			{
-				TKey* m_key = nullptr;
-				TValue* m_value = nullptr;
-			public:
-				KeyValuePair() = default;
-				TKey &Key() {
-					return *m_key;
-				}
-				TValue &Value() {
-					return *m_value;
-				}
-				TKey const&Key()const {
-					return *m_key;
-				}
-				TValue const&Value()const {
-					return *m_value;
-				}
-				void Set(TKey &Key, TValue&Value) {
-					this->m_key = &Key;
-					this->m_value = &Value;
-				}
-				KeyValuePair(TKey&Key, TValue&Value) :m_key(&Key), m_value(&Value) {}
-				KeyValuePair&operator=(KeyValuePair const&rhs) {
-					this->m_key = rhs.m_key;
-					this->m_value = rhs.m_value;
-					return *this;
-				}
-			};
+			template<class TKey, class TValue>class ObservePair;
 			template<class T>
 			class ICollection;
 			template<class TKey, class TValue>

@@ -192,7 +192,7 @@ namespace HL
 					this->m_objects = Forward(lhs);
 					return *this
 				}
-				void Add(T*&Target) {
+				void Add(T*Target) {
 					m_objects.Add((intptr_t)Target, Target);
 				}
 				void Remove(T*Target) {
@@ -222,53 +222,41 @@ namespace HL
 				}
 				~Pool() {
 					for (auto&item : m_objects)
+					{
 						delete item.Value();
+						m_objects.Remove(item.Key());
+					}
 				}
 			};
-			//内容
-			class ContentBase
+			//基础内容表示(连续字符集合)
+			class BasicContent
 			{
 			protected:
-				bool m_not;
-				wchar_t m_first;
-			public:
-				ContentBase(wchar_t First, bool Not = false) :m_first(First), m_not(Not) {}
-				wchar_t First() {
-					return this->m_first;
-				}
-				//是否接受
-				virtual bool Accept(wchar_t Target) {
-					if (m_first == L'.')
-						return !m_not;
-					return Target == m_first && !m_not;
-				}
-				virtual ContentBase* Clone() {
-					return new ContentBase(m_first, m_not);
-				}
-				virtual ~ContentBase() {
-				}
-			};
-			//字符集
-			class CharRange :public ContentBase
-			{
+				bool m_is_complementary;
 				wchar_t m_left;
 				wchar_t m_right;
 			public:
-				CharRange(wchar_t left, wchar_t right, bool not= false) :m_left(left), m_right(right), ContentBase(left, not) {}
+				BasicContent(wchar_t Target, bool Complementary = false) :m_left(Target), 
+					m_right(Target), 
+					m_is_complementary(Complementary) {}
+				BasicContent(wchar_t Left, wchar_t Right, bool Complementary = false) :m_left(Left),
+					m_right(Right),
+					m_is_complementary(Complementary) {}
+				inline wchar_t First()const {
+					return m_left;
+				}
 				virtual bool Accept(wchar_t Target) {
-					return (Target >= m_left && Target <= m_right) && !m_not;
+					if (m_left == '.')//Any
+						return true;
+					if (!m_is_complementary)
+						return (Target <= m_right && Target >= m_left);
+					else
+						return !(Target <= m_right && Target >= m_left);
 				}
-				virtual ContentBase* Clone() {
-					return new CharRange(m_left, m_right, m_not);
+				virtual BasicContent* Clone() {
+					return new BasicContent(m_left, m_right, m_is_complementary);
 				}
-				virtual ~CharRange() {}
-			};
-			//边动作
-			class Action
-			{
-			public:
-				virtual void Act(Edge*) = 0;
-				virtual ~Action() {}
+				virtual ~BasicContent() {}
 			};
 			//边
 			class Edge
@@ -279,13 +267,11 @@ namespace HL
 				//目标状态
 				Status*To = nullptr;
 				//匹配内容
-				ContentBase*Content = nullptr;
+				BasicContent*Content = nullptr;
 				//是否有效
 				bool Valid = true;
 				//是否为自环边
 				bool LoopEdge = false;
-				//动作
-				Generic::Array<Action*> Actions;
 			};
 			//状态
 			class Status
@@ -299,7 +285,7 @@ namespace HL
 				bool Final = false;
 				//是否有效
 				bool Valid = false;
-				//是否访问过(用于Debug
+				//是否访问过,用于Debug
 				bool Visited = false;
 			};
 			//资源
@@ -307,7 +293,7 @@ namespace HL
 			{
 			public:
 				Pool<NFA> NFAPool;
-				Pool<ContentBase> ContentPool;
+				Pool<BasicContent> ContentPool;
 				Pool<Edge> EdgePool;
 				Pool<Status> StatusPool;
 			};
@@ -321,7 +307,7 @@ namespace HL
 				Status*Head;
 				Status*Tail;
 				//构造节点
-				void BuildNode(ContentBase*Content)
+				void BuildNode(BasicContent*Content)
 				{
 					Head = Resources->StatusPool.CreateAndAppend();
 					Tail = Resources->StatusPool.CreateAndAppend();
@@ -411,7 +397,7 @@ namespace HL
 								{
 									range = false;
 									node = m_resource->NFAPool.CreateAndAppend(m_resource);
-									node->BuildNode(m_resource->ContentPool.CreateAndAppendWith<CharRange>(left, *token.Begin, not));
+									node->BuildNode(m_resource->ContentPool.CreateAndAppend(left, *token.Begin, not));
 								}
 								break;
 							case TokenType::Minus:
@@ -818,7 +804,6 @@ namespace HL
 					}
 				}
 			};
-			
 			//正则表达式
 			class Regex
 			{
