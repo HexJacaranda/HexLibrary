@@ -236,6 +236,8 @@ namespace HL
 				wchar_t m_left;
 				wchar_t m_right;
 			public:
+				BasicContent(BasicContent const&rhs) :m_is_complementary(rhs.m_is_complementary),
+					m_any(rhs.m_any), m_left(rhs.m_left), m_right(m_right) {}
 				BasicContent(bool Any) :m_any(true) {}
 				BasicContent(wchar_t Target, bool Complementary = false) :m_left(Target), 
 					m_right(Target), 
@@ -255,7 +257,7 @@ namespace HL
 						return !(Target <= m_right && Target >= m_left);
 				}
 				virtual void* ClonePtr()const {
-					return new BasicContent(m_left, m_right, m_is_complementary);
+					return new BasicContent(*this);
 				}
 				virtual ~BasicContent() {}
 			};
@@ -348,6 +350,8 @@ namespace HL
 				bool Valid = false;
 				//是否访问过,用于Debug
 				bool Visited = false;
+				//等效结束
+				bool EquivalentFinal = false;
 			};
 			//资源
 			class NFAResource
@@ -792,7 +796,7 @@ namespace HL
 						}
 					}
 				}
-				//获得状态的所有Depth超过1的闭包(若要指定所有的包将Depth设置为-1
+				//获得状态的所有Depth超过1的闭包(若要指定所有的包将Depth设置为-1)
 				static void GetClosure(Generic::Array<Closure>&Out, Status*Where, index_t Depth = 0) {
 					for (index_t i = 0; i < Where->OutEdges.Count(); i++) {
 						if (Where->OutEdges[i]->Content != nullptr
@@ -810,6 +814,17 @@ namespace HL
 							Where->OutEdges[i]->Valid = false;
 							GetClosure(Out, Where->OutEdges[i]->To, Depth + 1);
 						}
+					}
+				}
+				//标记等效结束状态
+				static void MarkEquivalentEndStatus(Pool<Status> &Target) {
+					for (auto&var : Target.GetContainer())
+					{
+						if (!var.Value()->Valid)
+							continue;
+						for (index_t i = 0; i < var.Value()->OutEdges.Count(); ++i)
+							if (var.Value()->OutEdges[i]->To->Final)
+								var.Value()->EquivalentFinal = true;
 					}
 				}
 				//移除无效边与状态
@@ -859,7 +874,8 @@ namespace HL
 						}
 					}
 					RemoveInvalidStatusAndEdges(Pool);
-					return nullptr;
+					MarkEquivalentEndStatus(Pool->StatusPool);
+					return Target;
 				}
 			};
 			//NFA匹配
@@ -869,6 +885,8 @@ namespace HL
 				static bool Match(const wchar_t*Target, const wchar_t*Top, Status*Where) {
 					if (Where->Final)//检查是否到达最终状态
 						return Target == Top;
+					if (Target == Top)
+						return Where->Final || Where->EquivalentFinal;
 					if (Where->OutEdges.Count() == 1)
 					{
 						//单分支进行直接迭代
