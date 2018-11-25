@@ -227,7 +227,16 @@ namespace HL
 				}
 			}
 
-
+			template<class U,class T,class...Args>
+			static bool Any(U const&Target, T const&First, Args const&...Rest) {
+				if (Target == First)
+					return true;
+				return Any(Target, Rest...);
+			}
+			template<class U, class T, class...Args>
+			static bool Any(U const&Target, T const&First) {
+				return Target == First;
+			}
 
 			template<class CharT>
 			bool BasicStringSingleMatch(const CharT*target_string, const CharT* source, size_t target_length) {
