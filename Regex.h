@@ -237,7 +237,7 @@ namespace HL
 				wchar_t m_right;
 			public:
 				BasicContent(BasicContent const&rhs) :m_is_complementary(rhs.m_is_complementary),
-					m_any(rhs.m_any), m_left(rhs.m_left), m_right(m_right) {}
+					m_any(rhs.m_any), m_left(rhs.m_left), m_right(rhs.m_right) {}
 				BasicContent(bool Any) :m_any(true) {}
 				BasicContent(wchar_t Target, bool Complementary = false) :m_left(Target), 
 					m_right(Target), 
@@ -563,9 +563,25 @@ namespace HL
 							else if (successive)//并联
 								goto Exit;
 							break;
-						case TokenType::LBracket:
-							node = ParseSet(); //字符集
+						case TokenType::LBracket://字符集
+						{
+							index_t before = m_tokenizer.Position();
+							node = ParseSet();
+							index_t after = m_tokenizer.Position();
+							if (m_tokenizer.Position() < Top)//Peek边界检查
+							{
+								index_t offset = 0;
+								NFA*suffix = Suffix(node, before, after, offset);
+								if (suffix != nullptr)
+								{
+									node = suffix;
+									m_tokenizer.Position(after + offset);//重新定位
+								}
+							}
+							else if (successive)
+								goto Exit;
 							break;
+						}
 						case TokenType::LParen:
 						{
 							index_t before = m_tokenizer.Position();
@@ -885,7 +901,7 @@ namespace HL
 				static bool Match(const wchar_t*Target, const wchar_t*Top, Status*Where) {
 					if (Where->Final)//检查是否到达最终状态
 						return Target == Top;
-					if (Target == Top)
+					if (Target == Top)//检查等效状态
 						return Where->Final || Where->EquivalentFinal;
 					if (Where->OutEdges.Count() == 1)
 					{
@@ -921,14 +937,32 @@ namespace HL
 					}
 				}
 			};
+			//匹配结果
+			class MatchResult
+			{
+				index_t m_index;
+				size_t m_length;
+			public:
+
+			};
 			//正则表达式
 			class Regex
 			{
 				String m_pattern;
 				NFA* m_enter = nullptr;
 				NFAResource * m_resource = nullptr;
-			public:
-				Regex(String const&Pattern) :m_pattern(Pattern),m_resource(new NFAResource) {
+			private:
+				void Clear() {
+					if (m_enter != nullptr)
+						m_enter = nullptr;
+					if (m_resource != nullptr) {
+						delete m_resource;
+						m_resource = nullptr;
+					}
+				}
+				void From(String const&Pattern) {
+					m_pattern = Pattern;
+					m_resource = new NFAResource;
 					Parser parser(m_pattern, m_resource);
 					m_enter = parser.Parse();
 					m_enter->Head->Valid = true;
@@ -936,15 +970,45 @@ namespace HL
 					m_enter->Tail->Final = true;
 					NFASimplify::SimplifyNFA(m_resource, m_enter);
 				}
-				inline bool Match(String const&Target) {
+			public:
+				Regex(Regex&&lhs)noexcept {
+					m_pattern = lhs.m_pattern;
+					m_enter = lhs.m_enter;
+					m_resource = lhs.m_resource;
+					lhs.m_enter = nullptr;
+					lhs.m_resource = nullptr;
+				}
+				Regex(Regex const&rhs) {
+					From(rhs.m_pattern);
+				}
+				Regex(String const&Pattern) {
+					From(Pattern);
+				}
+				Regex&operator=(Regex const&rhs) {
+					Clear();
+					From(rhs.m_pattern);
+					return *this;
+				}
+				Regex&operator=(Regex&&lhs)
+				{
+					Clear();
+					m_pattern = lhs.m_pattern;
+					m_enter = lhs.m_enter;
+					m_resource = lhs.m_resource;
+					lhs.m_enter = nullptr;
+					lhs.m_resource = nullptr;
+					return *this;
+				}
+				//是否匹配目标字符串
+				inline bool IsMatch(String const&Target)const {
 					return NFAMatch::Match(Target.GetData(), Target.GetData() + Target.Count(), m_enter->Head);
 				}
+				//获取源构造字符串
+				String const& GetPattern()const {
+					return this->m_pattern;
+				}
 				~Regex() {
-					if (m_enter != nullptr)m_enter = nullptr;
-					if (m_resource != nullptr) {
-						delete m_resource;
-						m_resource = nullptr;
-					}
+					Clear();
 				}
 			};
 		}
