@@ -72,12 +72,14 @@ namespace HL
 					TValue*Value = nullptr;
 					EntryPair(EntryPair const&rhs)
 					{
-						this->Key = new TKey(*rhs.Key);
-						this->Value = new TValue(*rhs.Value);
+						if (rhs.Key)
+							this->Key = new TKey(*rhs.Key);
+						if (rhs.Value)
+							this->Value = new TValue(*rhs.Value);
 						this->Hash = rhs.Hash;
 						this->Next = rhs.Next;
 					}
-					EntryPair(EntryPair &&lhs)
+					EntryPair(EntryPair &&lhs)noexcept
 					{
 						this->Key = lhs.Key;
 						this->Value = lhs.Value;
@@ -92,8 +94,10 @@ namespace HL
 					EntryPair&operator=(EntryPair const&rhs)
 					{
 						this->Clear();
-						this->Key = new TKey(*rhs.Key);
-						this->Value = new TValue(*rhs.Value);
+						if (rhs.Key)
+							this->Key = new TKey(*rhs.Key);
+						if (rhs.Value)
+							this->Value = new TValue(*rhs.Value);
 						this->Hash = rhs.Hash;
 						this->Next = rhs.Next;
 						return *this;
