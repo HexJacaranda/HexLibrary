@@ -39,7 +39,9 @@ namespace HL
 				//竖线
 				Or,
 				//转义
-				Escape
+				Escape,
+				//字符串结尾
+				EOS
 			};
 			//标记
 			class Token
@@ -113,6 +115,8 @@ namespace HL
 						return SetToken(TokenType::LBracket);
 					case L']':
 						return SetToken(TokenType::RBracket);
+					case L'\n':
+						return SetToken(TokenType::EOS);
 					default:
 						return SetToken(TokenType::Char);
 					}
@@ -153,6 +157,8 @@ namespace HL
 						return PeekToken(TokenType::LBracket);
 					case L']':
 						return PeekToken(TokenType::RBracket);
+					case L'\n':
+						return PeekToken(TokenType::EOS);
 					default:
 						return PeekToken(TokenType::Char);
 					}
@@ -180,14 +186,14 @@ namespace HL
 				Generic::Dictionary<intptr_t, T*> m_objects;
 			public:
 				Pool() {}
-				Pool(Pool &&lhs) :m_objects(Forward(lhs.m_objects)) {}
+				Pool(Pool &&lhs) :m_objects(Move(lhs.m_objects)) {}
 				Pool(Pool const& rhs) :m_objects(rhs.m_objects) {}
 				Pool& operator=(Pool const&rhs) {
 					this->m_objects = rhs.m_objects;
 					return *this;
 				}
 				Pool& operator=(Pool &&lhs) {
-					this->m_objects = Forward(lhs);
+					this->m_objects = Move(lhs);
 					return *this
 				}
 				T* Add(T*Target) {
@@ -286,6 +292,28 @@ namespace HL
 				}
 				virtual ~InconsistentCharSet() {}
 			};
+			//聚合字符集合
+			class CompoundCharSet :public BasicContent
+			{
+				Generic::Array<BasicContent*> m_set;
+			public:
+				CompoundCharSet(CompoundCharSet const&rhs) :BasicContent(rhs.m_left, rhs.m_right, rhs.m_is_complementary) {
+					for (index_t i = 0; i < rhs.m_set.Count(); ++i)
+						m_set.Add(static_cast<BasicContent*>(rhs.m_set[i]->ClonePtr()));
+				}
+				CompoundCharSet(bool Complementary = false) :BasicContent(L'\0', Complementary) {}
+				inline void Add(BasicContent* Target) {
+					m_set.Add(Target);
+				}
+				virtual void* ClonePtr()const {
+					return new CompoundCharSet(*this);
+				}
+				virtual ~CompoundCharSet() {
+					for (index_t i = 0; i < m_set.Count(); ++i)
+						if (m_set[i])delete m_set[i];
+					m_set.Clear();
+				}
+			};
 			//内建字符集合
 			class BuiltInCharSet
 			{
@@ -319,6 +347,46 @@ namespace HL
 					return new BasicContent(L'0', L'9', !Complementary);
 				}
 			};
+			//动作类型
+			enum class ActionType :unsigned
+			{
+				//捕获
+				Capture,
+				//探查
+				Peek
+			};
+			//动作
+			class Action
+			{
+			protected:
+				ActionType m_type;
+			public:
+				Action(ActionType Type) :m_type(Type) {}
+				ActionType GetType()const {
+					return m_type;
+				}
+				virtual bool Go(wchar_t const*) = 0;
+				virtual void Withdraw() = 0;
+				virtual ~Action(){}
+			};
+			//捕获
+			class Capture :public Action
+			{
+				String m_name;
+				index_t m_anonymous_index;
+				index_t m_base;
+				size_t m_length;
+			public:
+				Capture(index_t AnonymousIndex) :m_anonymous_index(AnonymousIndex), Action(ActionType::Capture) {}
+				Capture(String const&Name) :m_name(Name), Action(ActionType::Capture) {}
+				virtual bool Go(wchar_t const*) {
+					m_length++;
+				}
+				virtual void Withdraw() {
+					m_length--;
+				}
+				virtual ~Capture(){}
+			};
 			//边
 			class Edge
 			{
@@ -335,6 +403,8 @@ namespace HL
 				bool Valid = true;
 				//是否为自环边
 				bool LoopEdge = false;
+				//动作
+				Generic::Array<Action*> Actions;
 			};
 			//状态
 			class Status
@@ -431,7 +501,7 @@ namespace HL
 				}
 				//内建字符集合
 				NFA* BuiltInSet() {
-					NFA* out = m_resource->NFAPool.CreateAndAppend(m_resource);
+					NFA* out = NewNFA();
 					out->BuildNode(nullptr);
 					Token token;
 					m_tokenizer.Consume(token);
@@ -452,7 +522,7 @@ namespace HL
 				}
 				//Parse字符集合
 				NFA* ParseSet() {
-					NFA* out = m_resource->NFAPool.CreateAndAppend(m_resource);
+					NFA* out = NewNFA();
 					out->BuildNode(nullptr);
 					Token token;
 					m_tokenizer.Peek(token);//Peek一个
@@ -487,57 +557,35 @@ namespace HL
 					}
 					return out;
 				}
-				//[Base,Top)区间进行Parse,ParallelBreak指示是否对并联进行截断
-				NFA* ParseNFA(index_t Base, index_t Top, bool ParallelBreak = false)
-				{
+				//在[Base,Top)区间进行最小单位Parse
+				NFA* ParseUnit(index_t Base, index_t Top,bool& Single,Token&Last) {
+					Token token;
 					m_tokenizer.Position(Base);//定位
-					bool successive = false;//并联
-					NFA* out = m_resource->NFAPool.CreateAndAppend(m_resource);
+					m_tokenizer.Peek(token);
+					if (!Algorithm::Any(token.Type, TokenType::Char, TokenType::Escape))
+					{
+						m_tokenizer.Consume(token);
+						Last = token;
+						return nullptr;
+					}
+					NFA* out = NewNFA();
 					out->BuildNode(nullptr);
 					NFA* iter = nullptr;
 					NFA* node = nullptr;
-
-					Token token;
+				
 					while (!m_tokenizer.Done() && m_tokenizer.Position() < Top)
 					{
 						m_tokenizer.Consume(token);
 						switch (token.Type)
 						{
 						case TokenType::Char:
-						{
 							node = m_resource->NFAPool.CreateAndAppend(m_resource);//单字符NFA创建
 							if (*token.Begin == L'.')//任意匹配
 								node->BuildNode(m_resource->ContentPool.CreateAndAppend(true));
 							else
 								node->BuildNode(m_resource->ContentPool.CreateAndAppend(*token.Begin));
-							if (m_tokenizer.Position() < Top)//Peek边界检查
-							{
-								index_t offset = 0;
-								index_t current = m_tokenizer.Position();
-								NFA*suffix = Suffix(node, current - 1, current, offset);
-								if (suffix != nullptr)//后缀捕获成功
-								{
-									node = suffix;
-									m_tokenizer.Position(current + offset);//重新定位
-								}
-							}
-							else if (successive)//并联
-								goto Exit;
 							break;
-						}
-						case TokenType::Or://并联
-							if (ParallelBreak)
-							{
-								m_tokenizer.Move(-1);
-								goto Exit;
-							}
-							successive = true;
-							NFA::Connect(NewEdge(), iter->Tail, out->Tail);//上一个子NFA尾部仍处于悬垂状态,将其连接
-							node = ParseNFA(m_tokenizer.Position(), Top, true);
-							NFA::Connect(NewEdge(), out->Head, node->Head);
-							iter = node;
-							continue;
-						case TokenType::Escape://转义
+						case TokenType::Escape:
 							switch (GetEscapeType())
 							{
 							case EscapeType::BuiltInCharSet:
@@ -549,62 +597,24 @@ namespace HL
 								node->BuildNode(m_resource->ContentPool.CreateAndAppend(*token.Begin));
 								break;
 							}
-							if (m_tokenizer.Position() < Top)//Peek边界检查
-							{
-								index_t offset = 0;
-								index_t current = m_tokenizer.Position();
-								NFA*suffix = Suffix(node, current - 1, current, offset);
-								if (suffix != nullptr)//后缀捕获成功
-								{
-									node = suffix;
-									m_tokenizer.Position(current + offset);//重新定位
-								}
-							}
-							else if (successive)//并联
-								goto Exit;
 							break;
-						case TokenType::LBracket://字符集
-						{
-							index_t before = m_tokenizer.Position();
-							node = ParseSet();
-							index_t after = m_tokenizer.Position();
-							if (m_tokenizer.Position() < Top)//Peek边界检查
-							{
-								index_t offset = 0;
-								NFA*suffix = Suffix(node, before, after, offset);
-								if (suffix != nullptr)
-								{
-									node = suffix;
-									m_tokenizer.Position(after + offset);//重新定位
-								}
-							}
-							else if (successive)
-								goto Exit;
-							break;
-						}
-						case TokenType::LParen:
-						{
-							index_t before = m_tokenizer.Position();
-							node = ParseNFA(m_tokenizer.Position(), Top);
-							index_t after = m_tokenizer.Position();
-							if (m_tokenizer.Position() < Top)//Peek边界检查
-							{
-								index_t offset = 0;
-								NFA*suffix = Suffix(node, before, after, offset);
-								if (suffix != nullptr)
-								{
-									node = suffix;
-									m_tokenizer.Position(after + offset);//重新定位
-								}
-							}
-							else if (successive)
-								goto Exit;
-							break;
-						}
-						case TokenType::RParen://右小括号，分组结束，退出SubParse
-							if (ParallelBreak)
-								m_tokenizer.Move(-1);
+						default:
+							Last = token;
 							goto Exit;
+						}
+						//单字符后缀处理
+						if (m_tokenizer.Position() < Top)//Peek边界检查
+						{
+							index_t offset = 0;
+							index_t current = m_tokenizer.Position();
+							NFA*suffix = Suffix(node, current - 1, current, offset);
+							if (suffix != nullptr)//后缀捕获成功
+							{
+								node = suffix;
+								m_tokenizer.Position(current + offset);//重新定位
+								Single = true;
+								goto Exit;
+							}
 						}
 						if (iter != nullptr)
 							NFA::Connect(NewEdge(), iter->Tail, node->Head);//除开第一次，进行前后连接
@@ -613,7 +623,95 @@ namespace HL
 						iter = node;
 					}
 				Exit:
+					//头部连接
+					if (iter == nullptr)
+					{
+						NFA::Connect(NewEdge(), out->Head, node->Head);
+						iter = node;
+					}
 					NFA::Connect(NewEdge(), iter->Tail, out->Tail);//尾部相连
+					if (m_tokenizer.Done())
+						Last.Type = TokenType::EOS;
+					return out;
+				}
+				//在[Base,Top)区间进行Parse
+				NFA* ParseNFA(index_t Base, index_t Top) {
+					m_tokenizer.Position(Base);
+					Token token;
+					NFA*iter = nullptr;
+					NFA*node = nullptr;
+					NFA* out = NewNFA();
+					out->BuildNode(nullptr);
+					bool single = false;
+					index_t before = Base;
+					index_t after = Base;
+					while (!m_tokenizer.Done() && m_tokenizer.Position() < Top)
+					{
+						before = m_tokenizer.Position();//记录子Parse开始
+						node = ParseUnit(m_tokenizer.Position(), Top, single, token);
+						switch (token.Type)
+						{
+						case TokenType::LBracket:
+							node = ParseSet(); break;
+						case TokenType::LParen:
+							node = ParseNFA(m_tokenizer.Position(), Top); break;
+						case TokenType::Or:
+							node = Parallel(node, m_tokenizer.Position(), Top); break;
+						case TokenType::RParen:
+							if (iter != nullptr)
+								NFA::Connect(NewEdge(), iter->Tail, node->Head);//除开第一次，进行前后连接
+							else
+								NFA::Connect(NewEdge(), out->Head, node->Head);//第一次进行头头连接
+							iter = node;
+							goto Exit;
+						default:
+							break;
+						}
+						after = m_tokenizer.Position();//记录子Parse结束
+						//后缀检查
+						if (m_tokenizer.Position() < Top&&!single)//Peek边界检查
+						{
+							index_t offset = 0;
+							NFA*suffix = Suffix(node, before, after, offset);
+							if (suffix != nullptr)//后缀捕获成功
+							{
+								node = suffix;
+								m_tokenizer.Position(after + offset);//重新定位
+							}
+						}
+
+						if (iter != nullptr)
+							NFA::Connect(NewEdge(), iter->Tail, node->Head);//除开第一次，进行前后连接
+						else
+							NFA::Connect(NewEdge(), out->Head, node->Head);//第一次进行头头连接
+						iter = node;
+					}
+				Exit:
+					NFA::Connect(NewEdge(), iter->Tail, out->Tail);//尾部相连
+					return out;
+				}
+				//并联
+				NFA* Parallel(NFA*Parsed, index_t Base, index_t Top) {
+					NFA* out = NewNFA();
+					out->BuildNode(nullptr);
+					out->Parallel(Parsed);
+					NFA* iter = Parsed;
+					bool single = false;
+					Token token;
+					while (!m_tokenizer.Done() && m_tokenizer.Position() < Top)
+					{
+						iter = ParseUnit(m_tokenizer.Position(), Top, single, token);
+						if (token.Type == TokenType::Or)
+							out->Parallel(iter);
+						else if (token.Type == TokenType::RParen || m_tokenizer.Done())
+						{
+							out->Parallel(iter);
+							break;
+						}
+						else {
+							//Exception
+						}
+					}
 					return out;
 				}
 				//反复
@@ -765,7 +863,7 @@ namespace HL
 				}
 				//Parse前缀
 				NFA* Prefix() {
-					//TODO (功能边，例如捕获，后期完成
+
 				}
 				//新边
 				inline Edge* NewEdge() {
@@ -777,6 +875,9 @@ namespace HL
 				//新状态
 				inline Status* NewStatus() {
 					return m_resource->StatusPool.CreateAndAppend();
+				}
+				inline NFA* NewNFA() {
+					return m_resource->NFAPool.CreateAndAppend(m_resource);
 				}
 			public:
 				Parser(String const&Source,NFAResource*Resource) :m_tokenizer(Source.GetData(), Source.Count()),m_resource(Resource) {}
@@ -911,12 +1012,20 @@ namespace HL
 							if (iter->OutEdges[0]->Content != nullptr)
 							{
 								if (!iter->OutEdges[0]->Content->Accept(*Target))
+								{
+									for (index_t i = 0; i < iter->OutEdges[0]->Actions.Count(); ++i)
+										iter->OutEdges[0]->Actions[i]->Withdraw();
 									return false;
+								}
+								for (index_t i = 0; i < iter->OutEdges[0]->Actions.Count(); ++i)
+									iter->OutEdges[0]->Actions[i]->Go(Target);
 								Target++;
 							}
 							iter = iter->OutEdges[0]->To;
 							if (iter->Final)
 								return Target == Top;
+							if (Target == Top)
+								return iter->Final || iter->EquivalentFinal;
 						}
 						return Match(Target, Top, iter);
 					}
@@ -930,8 +1039,14 @@ namespace HL
 									return true;
 							}
 							else if (Where->OutEdges[i]->Content->Accept(*Target))
+							{
 								if (Match(Target + 1, Top, Where->OutEdges[i]->To))
+								{
+									for (index_t i = 0; i < Where->OutEdges[i]->Actions.Count(); ++i)
+										Where->OutEdges[i]->Actions[i]->Go(Target);
 									return true;
+								}
+							}
 						}
 						return false;
 					}
@@ -942,6 +1057,8 @@ namespace HL
 			{
 				index_t m_index;
 				size_t m_length;
+				Generic::Dictionary<String, String> m_named_capture;
+				Generic::Array<String> m_anonymous_capture;
 			public:
 
 			};
