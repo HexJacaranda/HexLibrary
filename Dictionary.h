@@ -140,8 +140,11 @@ namespace HL
 				Entry * m_iter;
 				Entry * m_end;
 			public:
-				DictionaryEnumerator(Entry * begin, Entry * end) :m_iter(begin), m_end(end), Base(&this->m_current) {
-					this->MoveNext();
+				DictionaryEnumerator(Entry * begin, Entry * end) :m_iter(begin), m_end(end) {
+					if (this->MoveNext() == Iteration::EnumerationResult::EOE)
+						this->CurrentObject = nullptr;
+					else
+						this->CurrentObject = &m_current;
 				}
 				DictionaryEnumerator(DictionaryEnumerator const&rhs) :m_current(rhs.m_current), m_iter(rhs.m_iter), m_end(rhs.m_end), Base(&this->m_current) {}
 				virtual Iteration::EnumerationResult MoveNext() final {
@@ -289,8 +292,8 @@ namespace HL
 				}
 
 				Dictionary(Dictionary &&lhs)noexcept {
-					this->m_buckets = Forward(lhs.m_buckets);
-					this->m_entries = Forward(lhs.m_entries);
+					this->m_buckets = Move(lhs.m_buckets);
+					this->m_entries = Move(lhs.m_entries);
 					this->m_count = lhs.m_count;
 					this->m_freelist = lhs.m_freelist;
 					this->m_freecount = lhs.m_freecount;
@@ -308,8 +311,8 @@ namespace HL
 
 				Dictionary&operator=(Dictionary &&lhs)noexcept {
 					this->Clear();
-					this->m_buckets = Forward(lhs.m_buckets);
-					this->m_entries = Forward(lhs.m_entries);
+					this->m_buckets = Move(lhs.m_buckets);
+					this->m_entries = Move(lhs.m_entries);
 					this->m_count = lhs.m_count;
 					this->m_freelist = lhs.m_freelist;
 					this->m_freecount = lhs.m_freecount;
@@ -324,6 +327,7 @@ namespace HL
 				virtual void Add(TKey const&Key, TValue const&Value)final {
 					Insert(Key, Value, true);
 				}
+
 				//移除元素
 				virtual bool Remove(TKey const&Key)final {
 					if (m_buckets.Count() != 0) {
@@ -348,6 +352,13 @@ namespace HL
 						}
 					}
 					return false;
+				}
+				bool TryGet(TKey const&Key, TValue&Out)const {
+					index_t index = FindEntry(Key);
+					if (index < 0)
+						return false;
+					Out = *m_entries[index].Value;
+					return true;
 				}
 				//是否包含元素
 				virtual bool Contains(TKey const&Key)const final {

@@ -27,6 +27,9 @@ namespace HL
 				IEnumerator(T*Current) :CurrentObject(Current) {}
 				IEnumerator() {}
 			public:
+				inline bool Vaild() {
+					return CurrentObject != nullptr;
+				}
 				virtual EnumerationResult MoveNext() = 0;
 				inline T& Current() {
 					return *CurrentObject;
@@ -45,7 +48,10 @@ namespace HL
 				uptr<IEnumerator<T>> m_iter;
 				bool m_eoe = false;
 			public:
-				Iterator(uptr<IEnumerator<T>> const&target) :m_iter(target) {}
+				Iterator(uptr<IEnumerator<T>> const&target) :m_iter(target) {
+					if (!m_iter->Vaild())
+						m_eoe = true;
+				}
 				Iterator(Iterator const&rhs) :m_iter(rhs.m_iter.Clone()), m_eoe(rhs.m_eoe) {}
 				Iterator(){}
 				Iterator<T>& operator++() {
