@@ -302,6 +302,11 @@ namespace HL
 						m_set.Add(static_cast<BasicContent*>(rhs.m_set[i]->ClonePtr()));
 				}
 				CompoundCharSet(bool Complementary = false) :BasicContent(L'\0', Complementary) {}
+				virtual bool Accept(wchar_t Target) {
+					for (index_t i = 0; i < m_set.Count(); ++i)
+						if (m_set[i]->Accept(Target))return true;
+					return false;
+				}
 				inline void Add(BasicContent* Target) {
 					m_set.Add(Target);
 				}
@@ -330,13 +335,7 @@ namespace HL
 				}
 				//非空白字符集合即:\\S
 				static BasicContent* ComplementaryBlankSet(bool Complementary = false) {
-					InconsistentCharSet* ret = new InconsistentCharSet(!Complementary);
-					ret->Add('\f');
-					ret->Add('\n');
-					ret->Add('\r');
-					ret->Add('\t');
-					ret->Add('\v');
-					return ret;
+					return BlankSet(!Complementary);
 				}
 				//数字字符集合即:\\d
 				static BasicContent* DigitSet(bool Complementary = false) {
@@ -346,46 +345,89 @@ namespace HL
 				static BasicContent* ComplementaryDigitSet(bool Complementary = false) {
 					return new BasicContent(L'0', L'9', !Complementary);
 				}
-			};
-			//动作类型
-			enum class ActionType :unsigned
-			{
-				//捕获
-				Capture,
-				//探查
-				Peek
-			};
-			//动作
-			class Action
-			{
-			protected:
-				ActionType m_type;
-			public:
-				Action(ActionType Type) :m_type(Type) {}
-				ActionType GetType()const {
-					return m_type;
+				static BasicContent* LowerAToZSet(bool Complementary = false) {
+					return new BasicContent(L'a', L'z', Complementary);
 				}
-				virtual bool Go(wchar_t const*) = 0;
-				virtual void Withdraw() = 0;
-				virtual ~Action(){}
+				static BasicContent* UpperAToZSet(bool Complementary = false) {
+					return new BasicContent(L'A', L'Z', Complementary);
+				}
+				//单词字符集合即:\\w
+				static CompoundCharSet* WordSet(bool Complementary = false) {
+					CompoundCharSet*set = new CompoundCharSet(Complementary);
+					set->Add(LowerAToZSet());
+					set->Add(UpperAToZSet());
+					set->Add(DigitSet());
+					set->Add(new BasicContent(L'_'));
+					return set;
+				}
+				//非单词字符集合即:\\W
+				static CompoundCharSet* ComplementaryWordSet(bool Complementary = false) {
+					return WordSet(!Complementary);
+				}
+			};
+
+			struct CaptureInfo
+			{
+				wchar_t const* Base;
+				size_t Size;
+			};
+			//捕获包
+			struct CapturePackage
+			{
+				const wchar_t* Source = nullptr;
+				Generic::Dictionary<String, CaptureInfo> NamedCapture;
+				Generic::array<CaptureInfo> AnonymousCapture;
+			public:
+				CapturePackage(const wchar_t* Target, size_t AnonymousCaptureLength, Generic::Dictionary<String, index_t> const&NamedCaptureTable)
+					:AnonymousCapture(AnonymousCaptureLength), Source(Target) {
+					for (auto&var : NamedCaptureTable)
+					{
+						NamedCapture.Add(var.Key(), CaptureInfo{ 0,0 });
+					}
+				}
+				void SetToZero() {
+					for (auto&var : NamedCapture)
+						var.Value().Size = 0;
+					for (index_t i = 0; i < AnonymousCapture.Count(); ++i)
+						AnonymousCapture[i].Size = 0;
+				}
 			};
 			//捕获
-			class Capture :public Action
+			class Capture
 			{
 				String m_name;
-				index_t m_anonymous_index;
-				index_t m_base;
-				size_t m_length;
+				index_t m_anonymous_index = -1;
 			public:
-				Capture(index_t AnonymousIndex) :m_anonymous_index(AnonymousIndex), Action(ActionType::Capture) {}
-				Capture(String const&Name) :m_name(Name), Action(ActionType::Capture) {}
-				virtual bool Go(wchar_t const*) {
-					m_length++;
+				Capture(index_t AnonymousIndex) :m_anonymous_index(AnonymousIndex){}
+				Capture(String const&Name) :m_name(Name) {}
+				bool Go(CapturePackage*Package, wchar_t const* Current) {
+					if (Package == nullptr)
+						return false;
+					if (m_anonymous_index != -1)
+					{
+						CaptureInfo&info = Package->AnonymousCapture[m_anonymous_index];
+						if (info.Size == 0)
+							info.Base = Current;
+						info.Size++;
+					}
+					else
+					{
+						CaptureInfo&info = Package->NamedCapture[m_name];
+						if (info.Size == 0)
+							info.Base = Current;
+						info.Size++;
+					}
+					return true;
 				}
-				virtual void Withdraw() {
-					m_length--;
+				void WithDraw(CapturePackage*Package) {
+					if (Package == nullptr)
+						return;
+					if (m_anonymous_index != -1)
+						Package->AnonymousCapture[m_anonymous_index].Size--;
+					else
+						Package->NamedCapture[m_name].Size--;
 				}
-				virtual ~Capture(){}
+				~Capture(){}
 			};
 			//边
 			class Edge
@@ -404,7 +446,7 @@ namespace HL
 				//是否为自环边
 				bool LoopEdge = false;
 				//动作
-				Generic::Array<Action*> Actions;
+				Generic::Array<Capture*> Actions;
 			};
 			//状态
 			class Status
@@ -431,6 +473,7 @@ namespace HL
 				Pool<BasicContent> ContentPool;
 				Pool<Edge> EdgePool;
 				Pool<Status> StatusPool;
+				Pool<Capture> CapturePool;
 			};
 			//NFA状态机
 			class NFA
@@ -487,14 +530,17 @@ namespace HL
 			{
 				Tokenizer m_tokenizer;
 				NFAResource*m_resource = nullptr;
+				Generic::Array<Capture*> m_capture_stack;
+				Generic::Dictionary<index_t, index_t> m_anonymous_index_table;
+				Generic::Dictionary<String, index_t> m_named_index_table;
 			private:
 				EscapeType GetEscapeType() {
 					Token token;
 					m_tokenizer.Peek(token);
-					if (Algorithm::Any(*token.Begin, L'S', L's', L'd', L'D'))
+					if (Algorithm::Any(*token.Begin, L'S', L's', L'd', L'D', L'W', L'w'))
 						return EscapeType::BuiltInCharSet;
 					else if (Algorithm::Any(*token.Begin,
-						L'{', L'}', L'[', L']', L'(', L')', L'+', L'?', L'*', L'\\'))
+						L'{', L'}', L'[', L']', L'(', L')', L'+', L'?', L'*', L'\\', L'-'))
 						return EscapeType::KeyWord;
 					//TODO 异常
 					return EscapeType::KeyWord;
@@ -508,13 +554,17 @@ namespace HL
 					switch (*token.Begin)
 					{
 					case L'S':
-						out->Parallel(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::ComplementaryBlankSet()))); break;
+						out->Parallel(SetCapture(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::ComplementaryBlankSet())))); break;
 					case L's':
-						out->Parallel(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::BlankSet()))); break;
+						out->Parallel(SetCapture(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::BlankSet())))); break;
 					case L'd':
-						out->Parallel(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::DigitSet()))); break;
+						out->Parallel(SetCapture(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::DigitSet())))); break;
 					case L'D':
-						out->Parallel(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::ComplementaryDigitSet()))); break;
+						out->Parallel(SetCapture(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::ComplementaryDigitSet())))); break;
+					case L'w':
+						out->Parallel(SetCapture(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::WordSet())))); break;
+					case L'W':
+						out->Parallel(SetCapture(NewEdge(this->m_resource->ContentPool.Add(BuiltInCharSet::ComplementaryWordSet())))); break;
 					default:
 						break;
 					}
@@ -558,7 +608,7 @@ namespace HL
 					return out;
 				}
 				//在[Base,Top)区间进行最小单位Parse
-				NFA* ParseUnit(index_t Base, index_t Top,bool& Single,Token&Last) {
+				NFA* ParseUnit(index_t Base, index_t Top, bool& Single, Token&Last) {
 					Token token;
 					m_tokenizer.Position(Base);//定位
 					m_tokenizer.Peek(token);
@@ -572,18 +622,21 @@ namespace HL
 					out->BuildNode(nullptr);
 					NFA* iter = nullptr;
 					NFA* node = nullptr;
-				
+					index_t before = Base;
+					index_t after = Base;
 					while (!m_tokenizer.Done() && m_tokenizer.Position() < Top)
 					{
+						before = m_tokenizer.Position();
 						m_tokenizer.Consume(token);
 						switch (token.Type)
 						{
 						case TokenType::Char:
 							node = m_resource->NFAPool.CreateAndAppend(m_resource);//单字符NFA创建
+							node->BuildNode(nullptr);
 							if (*token.Begin == L'.')//任意匹配
-								node->BuildNode(m_resource->ContentPool.CreateAndAppend(true));
+								node->Parallel(SetCapture(NewEdge(m_resource->ContentPool.CreateAndAppend(true))));
 							else
-								node->BuildNode(m_resource->ContentPool.CreateAndAppend(*token.Begin));
+								node->Parallel(SetCapture(NewEdge(m_resource->ContentPool.CreateAndAppend(*token.Begin))));
 							break;
 						case TokenType::Escape:
 							switch (GetEscapeType())
@@ -594,7 +647,8 @@ namespace HL
 							case EscapeType::KeyWord:
 								m_tokenizer.Consume(token);
 								node = m_resource->NFAPool.CreateAndAppend(m_resource);
-								node->BuildNode(m_resource->ContentPool.CreateAndAppend(*token.Begin));
+								node->BuildNode(nullptr);
+								node->Parallel(SetCapture(NewEdge(m_resource->ContentPool.CreateAndAppend(*token.Begin))));
 								break;
 							}
 							break;
@@ -602,17 +656,25 @@ namespace HL
 							Last = token;
 							goto Exit;
 						}
+						after = m_tokenizer.Position();
 						//单字符后缀处理
 						if (m_tokenizer.Position() < Top)//Peek边界检查
 						{
 							index_t offset = 0;
 							index_t current = m_tokenizer.Position();
-							NFA*suffix = Suffix(node, current - 1, current, offset);
+							NFA*suffix = Suffix(node, before, after, offset);
 							if (suffix != nullptr)//后缀捕获成功
 							{
 								node = suffix;
 								m_tokenizer.Position(current + offset);//重新定位
 								Single = true;
+
+								if (iter != nullptr)
+									NFA::Connect(NewEdge(), iter->Tail, node->Head);//除开第一次，进行前后连接
+								else
+									NFA::Connect(NewEdge(), out->Head, node->Head);//第一次进行头头连接
+								iter = node;
+
 								goto Exit;
 							}
 						}
@@ -623,12 +685,6 @@ namespace HL
 						iter = node;
 					}
 				Exit:
-					//头部连接
-					if (iter == nullptr)
-					{
-						NFA::Connect(NewEdge(), out->Head, node->Head);
-						iter = node;
-					}
 					NFA::Connect(NewEdge(), iter->Tail, out->Tail);//尾部相连
 					if (m_tokenizer.Done())
 						Last.Type = TokenType::EOS;
@@ -654,22 +710,32 @@ namespace HL
 						case TokenType::LBracket:
 							node = ParseSet(); break;
 						case TokenType::LParen:
-							node = ParseNFA(m_tokenizer.Position(), Top); break;
+							if (node != nullptr)//判断是不是第一个外层(
+							{
+								if (iter != nullptr)
+									NFA::Connect(NewEdge(), iter->Tail, node->Head);//除开第一次，进行前后连接
+								else
+									NFA::Connect(NewEdge(), out->Head, node->Head);//第一次进行头头连接
+								iter = node;
+							}
+							before = m_tokenizer.Position() - 1;
+							node = ParseCapture(m_tokenizer.Position(), Top);
+							break;
 						case TokenType::Or:
 							node = Parallel(node, m_tokenizer.Position(), Top); break;
 						case TokenType::RParen:
-							if (iter != nullptr)
-								NFA::Connect(NewEdge(), iter->Tail, node->Head);//除开第一次，进行前后连接
-							else
+							if (iter == nullptr)
+							{
 								NFA::Connect(NewEdge(), out->Head, node->Head);//第一次进行头头连接
-							iter = node;
+								iter = node;
+							}
 							goto Exit;
 						default:
 							break;
 						}
 						after = m_tokenizer.Position();//记录子Parse结束
 						//后缀检查
-						if (m_tokenizer.Position() < Top&&!single)//Peek边界检查
+						if (m_tokenizer.Position() < Top && !single)//Peek边界检查
 						{
 							index_t offset = 0;
 							NFA*suffix = Suffix(node, before, after, offset);
@@ -679,7 +745,6 @@ namespace HL
 								m_tokenizer.Position(after + offset);//重新定位
 							}
 						}
-
 						if (iter != nullptr)
 							NFA::Connect(NewEdge(), iter->Tail, node->Head);//除开第一次，进行前后连接
 						else
@@ -689,6 +754,19 @@ namespace HL
 				Exit:
 					NFA::Connect(NewEdge(), iter->Tail, out->Tail);//尾部相连
 					return out;
+				}
+				//设置捕获
+				Edge* SetCapture(Edge*Target) {
+					for (index_t i = 0; i < m_capture_stack.Count(); ++i)
+						Target->Actions.Add(m_capture_stack[i]);
+					return Target;
+				}
+				inline void PushCapture(Capture*Target)
+				{
+					m_capture_stack.Add(Target);
+				}
+				inline void PopCapture() {
+					m_capture_stack.Pop();
 				}
 				//并联
 				NFA* Parallel(NFA*Parsed, index_t Base, index_t Top) {
@@ -720,6 +798,8 @@ namespace HL
 					NFA*ret = m_resource->NFAPool.CreateAndAppend(m_resource);
 					ret->BuildNode(nullptr);
 					NFA*tail = nullptr;
+					
+
 					if (Min == 1)
 					{
 						NFA* node = Parsed;
@@ -790,6 +870,10 @@ namespace HL
 						NFA::Connect(NewEdge(), tail->Head, ret->Tail);//可跳过
 						NFA::Connect(NewEdge(), tail->Tail, ret->Tail);//结尾连接
 					}
+					else if (Max - Min == 0)
+					{
+						NFA::Connect(NewEdge(), tail->Tail, ret->Tail);
+					}
 					return ret;
 				}
 				//Parse后缀
@@ -858,12 +942,51 @@ namespace HL
 						m_tokenizer.Move(-1);
 						return nullptr;
 					}
+					m_tokenizer.Peek(token);
+					if (token.Type == TokenType::QMark)//非贪婪匹配
+					{
+						//TODO
+					}
 					ret = Repeat(Parsed, Base, Top, left, right);
 					return ret;
 				}
-				//Parse前缀
-				NFA* Prefix() {
-
+				//Parse捕获组
+				NFA* ParseCapture(index_t Base,index_t Top) {
+					m_tokenizer.Position(Base);
+					Token token;
+					m_tokenizer.Peek(token);
+					if (token.Type != TokenType::QMark)
+					{
+						if (!m_anonymous_index_table.Contains(Base - 1))
+							m_anonymous_index_table.Add(Base - 1, m_anonymous_index_table.Count());
+						PushCapture(NewCapture(m_anonymous_index_table[Base - 1]));
+						NFA*ret = ParseNFA(Base, Top);
+						PopCapture();
+						return ret;
+					}
+					else
+						m_tokenizer.Consume(token);
+					m_tokenizer.Consume(token);
+					if (*token.Begin == L'<')
+					{
+						const wchar_t*end = StringFunction::GoUntil(token.Begin + 1, L'>');
+						size_t count = end - token.Begin - 1;
+						String name;
+						name.Append(token.Begin + 1, 0, count);
+						if (!m_named_index_table.Contains(name))
+							m_named_index_table.Add(name, Base - 1);
+						PushCapture(NewCapture(name));
+						NFA*ret = ParseNFA(m_tokenizer.Position() + count + 1, Top);
+						PopCapture();
+						return ret;
+					}
+					else if (*token.Begin == L':')
+						return ParseNFA(m_tokenizer.Position(), Top);
+					else
+					{
+						//Exception
+					}
+					return nullptr;
 				}
 				//新边
 				inline Edge* NewEdge() {
@@ -879,12 +1002,22 @@ namespace HL
 				inline NFA* NewNFA() {
 					return m_resource->NFAPool.CreateAndAppend(m_resource);
 				}
+				template<class...Args>
+				inline Capture* NewCapture(Args&&...args) {
+					return this->m_resource->CapturePool.CreateAndAppend(args...);
+				}
 			public:
 				Parser(String const&Source,NFAResource*Resource) :m_tokenizer(Source.GetData(), Source.Count()),m_resource(Resource) {}
 				Parser(wchar_t const* Source, size_t Size, NFAResource*Resource) :m_tokenizer(Source, Size), m_resource(Resource) {}
 				inline NFA* Parse()
 				{
 					return ParseNFA(0, m_tokenizer.Count());
+				}
+				inline Generic::Dictionary<index_t, index_t>const& AnonymousCaptureTable()const {
+					return this->m_anonymous_index_table;
+				}
+				inline Generic::Dictionary<String, index_t>const& NamedCaptureTable()const {
+					return this->m_named_index_table;
 				}
 				~Parser() {}
 			};
@@ -981,75 +1114,20 @@ namespace HL
 							if (index >= 0)
 								closures[i].Target->InEdges[index]->Valid = false;
 							Edge*edge = Pool->EdgePool.CreateAndAppend();
-							if (closures[i].ValidEdge->Content != nullptr)
-								edge->Content = static_cast<BasicContent*>(closures[i].ValidEdge->Content->ClonePtr());
-							if (edge->Content != nullptr)
+							edge->Actions = closures[i].ValidEdge->Actions;//动作拷贝
+							if (closures[i].ValidEdge->Content != nullptr)//内容拷贝
+							{
+								edge->Content = static_cast<BasicContent*>(closures[i].ValidEdge->Content->ClonePtr()); 
 								Pool->ContentPool.Add(edge->Content);
-							if (closures[i].Target == var.Value())
-								edge->LoopEdge = true;//记录Loop边
+							}
+							if (closures[i].Target == var.Value())//记录Loop边
+								edge->LoopEdge = true;
 							NFA::Connect(edge, var.Value(), closures[i].Target);
 						}
 					}
 					RemoveInvalidStatusAndEdges(Pool);
 					MarkEquivalentEndStatus(Pool->StatusPool);
 					return Target;
-				}
-			};
-			//NFA匹配
-			class NFAMatch
-			{
-			public:
-				static bool Match(const wchar_t*Target, const wchar_t*Top, Status*Where) {
-					if (Where->Final)//检查是否到达最终状态
-						return Target == Top;
-					if (Target == Top)//检查等效状态
-						return Where->Final || Where->EquivalentFinal;
-					if (Where->OutEdges.Count() == 1)
-					{
-						//单分支进行直接迭代
-						Status* iter = Where;
-						while (iter->OutEdges.Count() == 1) {
-							if (iter->OutEdges[0]->Content != nullptr)
-							{
-								if (!iter->OutEdges[0]->Content->Accept(*Target))
-								{
-									for (index_t i = 0; i < iter->OutEdges[0]->Actions.Count(); ++i)
-										iter->OutEdges[0]->Actions[i]->Withdraw();
-									return false;
-								}
-								for (index_t i = 0; i < iter->OutEdges[0]->Actions.Count(); ++i)
-									iter->OutEdges[0]->Actions[i]->Go(Target);
-								Target++;
-							}
-							iter = iter->OutEdges[0]->To;
-							if (iter->Final)
-								return Target == Top;
-							if (Target == Top)
-								return iter->Final || iter->EquivalentFinal;
-						}
-						return Match(Target, Top, iter);
-					}
-					else
-					{
-						//多分枝
-						for (index_t i = 0; i < Where->OutEdges.Count(); ++i) {
-							if (Where->OutEdges[i]->Content == nullptr)
-							{
-								if (Match(Target, Top, Where->OutEdges[i]->To))
-									return true;
-							}
-							else if (Where->OutEdges[i]->Content->Accept(*Target))
-							{
-								if (Match(Target + 1, Top, Where->OutEdges[i]->To))
-								{
-									for (index_t i = 0; i < Where->OutEdges[i]->Actions.Count(); ++i)
-										Where->OutEdges[i]->Actions[i]->Go(Target);
-									return true;
-								}
-							}
-						}
-						return false;
-					}
 				}
 			};
 			//匹配结果
@@ -1060,7 +1138,206 @@ namespace HL
 				Generic::Dictionary<String, String> m_named_capture;
 				Generic::Array<String> m_anonymous_capture;
 			public:
+				MatchResult(index_t Index, size_t Length, CapturePackage const& Capture) :m_index(Index), m_length(Length) {
+					for (auto&var : Capture.NamedCapture)
+					{
+						String str((size_t)0);
+						str.Append(var.Value().Base, 0, var.Value().Size);
+						m_named_capture.Add(var.Key(), str);
+					}
+					for (index_t i = 0; i < Capture.AnonymousCapture.Count(); ++i)
+					{
+						String str((size_t)0);
+						str.Append(Capture.AnonymousCapture[i].Base, 0, Capture.AnonymousCapture[i].Size);
+						m_anonymous_capture.Add(Move(str));
+					}
+				}
+				String const& operator[](index_t Index)const {
+					return m_anonymous_capture[Index];
+				}
+				String const& operator[](String const&Key)const {
+					return m_named_capture[Key];
+				}
+				String const& GetAnonymousCapture(index_t Index)const {
+					return m_anonymous_capture[Index];
+				}
+				String const& GetNamedCapture(String const&Key)const {
+					return m_named_capture[Key];
+				}
+			};
+			//NFA匹配
+			class NFAMatch
+			{
+			public:
+				static void CaptureGo(Edge*Target, const wchar_t*Current, CapturePackage*Package) {
+					for (index_t i = 0; i < Target->Actions.Count(); ++i)
+						Target->Actions[i]->Go(Package, Current);
+				}
+				
+				static void CaptureWithdraw(Edge*Target, CapturePackage*Package) {
+					for (index_t i = 0; i < Target->Actions.Count(); ++i)
+						Target->Actions[i]->WithDraw(Package);
+				}
 
+				static const wchar_t* MatchUnit(const wchar_t*Target, const wchar_t*Top, Status*Where, CapturePackage*Package) {
+					if (Where->Final || Where->EquivalentFinal)//检查是否到达最终状态
+						return Target;
+					if (Target == Top)
+						if (Where->Final || Where->EquivalentFinal)
+							return Target;
+					if (Where->OutEdges.Count() == 1)
+					{
+						//单分支进行直接迭代
+						Status* iter = Where;
+						while (iter->OutEdges.Count() == 1) {
+							if (iter->OutEdges[0]->Content != nullptr)
+							{
+								if (Package != nullptr)
+									CaptureGo(iter->OutEdges[0], Target, Package);
+								if (!iter->OutEdges[0]->Content->Accept(*Target))
+								{
+									if (Package != nullptr)
+										CaptureWithdraw(iter->OutEdges[0], Package);
+									return nullptr;
+								}
+								Target++;
+							}
+							iter = iter->OutEdges[0]->To;
+
+							if (iter->Final || iter->EquivalentFinal)//检查是否到达最终状态
+								return Target;
+							if (Target == Top)
+								if (iter->Final || iter->EquivalentFinal)
+									return Target;
+						}
+						return MatchUnit(Target, Top, iter, Package);
+					}
+					else
+					{
+						//多分枝
+						for (index_t i = 0; i < Where->OutEdges.Count(); ++i) {
+							if (Where->OutEdges[i]->Content == nullptr)
+							{
+								const wchar_t*ret = MatchUnit(Target, Top, Where->OutEdges[i]->To, Package);
+								if (ret != nullptr)
+									return ret;
+							}
+							else if (Where->OutEdges[i]->Content->Accept(*Target))
+							{
+								if (Package != nullptr)
+									CaptureGo(Where->OutEdges[i], Target, Package);
+								const wchar_t*ret = MatchUnit(Target + 1, Top, Where->OutEdges[i]->To, Package);
+								if (ret != nullptr)
+									return ret;
+								else
+									if (Package != nullptr)
+										CaptureWithdraw(Where->OutEdges[i], Package);
+							}
+						}
+						return nullptr;
+					}
+				}
+				static bool IsMatchUnit(const wchar_t*Target, const wchar_t*Top, Status*Where, CapturePackage*Package) {
+					if (Where->Final || Where->EquivalentFinal)//检查是否到达最终状态
+					{
+						if (Target == Top)
+							return true;
+						if (Where->EquivalentFinal)
+						{
+							for (index_t i = 0; i < Where->OutEdges.Count(); ++i) {
+								if (Where->OutEdges[i]->Content != nullptr&&Where->OutEdges[i]->Content->Accept(*Target))
+								{
+									if (Package != nullptr)
+										CaptureGo(Where->OutEdges[i], Target, Package);
+									if (IsMatchUnit(Target + 1, Top, Where->OutEdges[i]->To, Package))
+										return true;
+									else
+										if (Package != nullptr)
+											CaptureGo(Where->OutEdges[i], Target, Package);
+								}
+							}
+						}
+					}
+					if (Target == Top)
+						if (Where->Final || Where->EquivalentFinal)
+							return true;
+					for (index_t i = 0; i < Where->OutEdges.Count(); ++i) {
+						if (Where->OutEdges[i]->Content == nullptr)
+						{
+							if (IsMatchUnit(Target, Top, Where->OutEdges[i]->To, Package))
+								return true;
+						}
+						else if (Where->OutEdges[i]->Content->Accept(*Target))
+						{
+							if (Package != nullptr)
+								CaptureGo(Where->OutEdges[i], Target, Package);
+							if (IsMatchUnit(Target + 1, Top, Where->OutEdges[i]->To, Package))
+								return true;
+							else
+								if (Package != nullptr)
+									CaptureWithdraw(Where->OutEdges[i], Package);
+						}
+					}
+					return false;
+				}
+				static UPointer::uptr<MatchResult> MatchFirst(const wchar_t*Target, const wchar_t*Top, Status*Where, size_t AnonymousLength, Generic::Dictionary<String, index_t>const&NamedTable)
+				{
+					const wchar_t*iter = Target;
+					CapturePackage package(Target, AnonymousLength, NamedTable);
+					while (iter != Top)
+					{
+						const wchar_t* ret = MatchUnit(iter, Top, Where, &package);
+						if (ret != nullptr)
+							return Reference::newptr<MatchResult>(iter - Target, ret - Target, package);
+						iter++;
+					}
+					return nullptr;
+				}
+				static bool IsMatchFirst(const wchar_t*Target, const wchar_t*Top, Status*Where)
+				{
+					const wchar_t*iter = Target;
+					while (iter != Top)
+					{
+						if (MatchUnit(iter, Top, Where, nullptr) != nullptr)
+							return true;
+						iter++;
+					}
+					return false;
+				}
+				static inline bool IsMatch(const wchar_t*Target, const wchar_t*Top, Status*Where)
+				{
+					return IsMatchUnit(Target, Top, Where, nullptr);
+				}
+			};
+			class Visualize
+			{
+			public:
+				static void DebugPrint(String Str, Status*Where) {
+					if (Where->Visited && !Where->Final)
+					{
+						std::wcout << Str << L"(Loop/E)" << std::endl;
+						return;
+					}
+					Where->Visited = true;
+					for (int i = 0; i < Where->OutEdges.Count(); ++i) {
+						String next = Str;
+						wchar_t ch = '?';
+						if (Where->OutEdges[i]->Content != nullptr)
+							ch = Where->OutEdges[i]->Content->First();
+						next += L"(Status)->";
+						next.Append(ch);
+						next += L"->";
+						if (!Where->OutEdges[i]->LoopEdge)
+							DebugPrint(next, Where->OutEdges[i]->To);
+						else
+						{
+							Str += L"[Loop]";
+							continue;
+						}
+					}
+					if (Where->Final)
+						std::wcout << Str << L"End" << std::endl;
+				}
 			};
 			//正则表达式
 			class Regex
@@ -1068,6 +1345,7 @@ namespace HL
 				String m_pattern;
 				NFA* m_enter = nullptr;
 				NFAResource * m_resource = nullptr;
+				Parser *m_parser = nullptr;
 			private:
 				void Clear() {
 					if (m_enter != nullptr)
@@ -1076,16 +1354,21 @@ namespace HL
 						delete m_resource;
 						m_resource = nullptr;
 					}
+					if (m_parser) {
+						delete m_parser;
+						m_parser = nullptr;
+					}
 				}
 				void From(String const&Pattern) {
 					m_pattern = Pattern;
 					m_resource = new NFAResource;
-					Parser parser(m_pattern, m_resource);
-					m_enter = parser.Parse();
+					m_parser = new Parser(m_pattern, m_resource);
+					m_enter = m_parser->Parse();
 					m_enter->Head->Valid = true;
 					m_enter->Tail->Valid = true;
 					m_enter->Tail->Final = true;
 					NFASimplify::SimplifyNFA(m_resource, m_enter);
+					
 				}
 			public:
 				Regex(Regex&&lhs)noexcept {
@@ -1109,16 +1392,24 @@ namespace HL
 				Regex&operator=(Regex&&lhs)
 				{
 					Clear();
-					m_pattern = lhs.m_pattern;
+					m_pattern = Move(lhs.m_pattern);
 					m_enter = lhs.m_enter;
 					m_resource = lhs.m_resource;
 					lhs.m_enter = nullptr;
 					lhs.m_resource = nullptr;
 					return *this;
 				}
-				//是否匹配目标字符串
+				//是否匹配目标字符串(这会抛弃掉字符串捕获以加快速度)
 				inline bool IsMatch(String const&Target)const {
-					return NFAMatch::Match(Target.GetData(), Target.GetData() + Target.Count(), m_enter->Head);
+					return NFAMatch::IsMatch(Target.GetData(), Target.GetData() + Target.Count(), m_enter->Head);
+				}
+				//是否匹配目标字符串(这会抛弃掉字符串捕获以加快速度)
+				inline bool IsMatchFirst(String const&Target)const {
+					return NFAMatch::IsMatchFirst(Target.GetData(), Target.GetData() + Target.Count(), m_enter->Head);
+				}
+				//匹配第一个字符串
+				inline UPointer::uptr<MatchResult> MatchFirst(String const&Target)const {
+					return NFAMatch::MatchFirst(Target.GetData(), Target.GetData() + Target.Count(), m_enter->Head, m_parser->AnonymousCaptureTable().Count(), m_parser->NamedCaptureTable());
 				}
 				//获取源构造字符串
 				String const& GetPattern()const {
