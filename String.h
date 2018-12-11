@@ -427,7 +427,7 @@ namespace HL
 			}
 		public:
 			BasicString():data(0) {}
-			BasicString(size_t length) :data(length) {}
+			BasicString(size_t length) :data(length > 0 ? 0 : length + 1) {}
 			BasicString(BasicString const&rhs) :data(rhs.data) {}
 			BasicString(ContainerT const&rhs) :data(rhs) {
 				EndWrite();
@@ -440,7 +440,7 @@ namespace HL
 				EndWrite();
 			}
 			BasicString(BasicString&& lhs)noexcept :data(static_cast<ContainerT&&>(lhs.data)) {}
-			BasicString(const CharT*string) {
+			BasicString(const CharT*string) :data(Algorithm::BasicStringLength(string) + 1) {
 				if (string)
 				{
 					this->BeginWrite();
@@ -927,7 +927,7 @@ namespace HL
 				{
 					MatchResult result = MatchSingle(string, offset, count);
 					if (result.Index == -1)
-						return Forward(ret);
+						return Move(ret);
 					offset += result.End;
 					if (ret.Count() <= result.Index)
 						ret.ExpandTo(result.Index + 1);
@@ -935,7 +935,7 @@ namespace HL
 						ret[result.Index] = new Memory::MemoryManager<MatchResult>(1);
 					ret[result.Index]->Append(result);
 				}
-				return Forward(ret);
+				return Move(ret);
 			}
 			template<class CharT, class...Args>
 			static void Format(Memory::MemoryManager<CharT>&out, const CharT* format, Args const&...args)
@@ -966,7 +966,7 @@ namespace HL
 							format_ptr = format + results[i].Param + 1;
 							length = results[i].End - results[i].Start - results[i].IndexLen - 1;
 						}
-						String in = Forward(StringFormat<FirstT, CharT>::Format(first, format_ptr, length));
+						String in = Move(StringFormat<FirstT, CharT>::Format(first, format_ptr, length));
 						size_t old = results[i].End - results[i].Start + 1;
 						StringFunction::ReplaceSingle(out, results[i].Start + offset, old, in.GetData(), in.Count());
 						offset += in.Count() - old;
@@ -990,7 +990,7 @@ namespace HL
 							format_ptr = format + results[i].Param + 1;
 							length = results[i].End - results[i].Start - results[i].IndexLen - 1;
 						}
-						String in = Forward(StringFormat<FirstT, CharT>::Format(first, format_ptr, length));
+						String in = Move(StringFormat<FirstT, CharT>::Format(first, format_ptr, length));
 						size_t old = results[i].End - results[i].Start + 1;
 						StringFunction::ReplaceSingle(out, results[i].Start + offset, old, in.GetData(), in.Count());
 						offset += in.Count() - old;
