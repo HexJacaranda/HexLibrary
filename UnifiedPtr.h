@@ -136,22 +136,26 @@ namespace HL
 				void SetValue(uptr<U> const&);
 				~uptr();
 			private: //特性行为拓展
-				typedef typename Interface::IndexerSupportInterface<T>::IndexType IndexType;
-				typedef typename Interface::IndexerSupportInterface<T>::ReturnType IndexRetType;
 				typedef typename Interface::FunctorSupportInterface<T>::ReturnType FunctorRetType;
 				typedef typename Interface::EnumerableSupportInterface<T>::IteratorType IterType;
 				typedef typename Interface::EnumerableSupportInterface<T>::ConstIteratorType ConstIterType;
 				typedef typename Interface::IteratorSupportInterface<T>::UnReferenceType UnRefType;
 			public:
-				inline IndexRetType& operator[](IndexType const&index) {
-					return this->m_ptr->operator[](index);
-				}
-				inline IndexRetType const& operator[](IndexType const&index)const {
-					return this->m_ptr->operator[](index);
+				template<class...Args>
+				inline constexpr auto operator[](Args&&...args)noexcept ->decltype(this->m_ptr->operator[](Forward<Args>(args)...)) {
+					return this->m_ptr->operator[](Forward<Args>(args)...);
 				}
 				template<class...Args>
-				inline FunctorRetType operator()(Args const&...args)const {
-					return this->m_ptr->operator()(const_cast<Args&>(args)...);
+				inline constexpr auto operator[](Args&&...args)const noexcept ->decltype(this->m_ptr->operator[](Forward<Args>(args)...)) {
+					return this->m_ptr->operator[](Forward<Args>(args)...);
+				}
+				template<class...Args>
+				inline constexpr auto operator()(Args&&...args)noexcept ->decltype(this->m_ptr->operator()(Forward<Args>(args)...)) {
+					return this->m_ptr->operator()(Forward<Args>(args)...);
+				}
+				template<class...Args>
+				inline constexpr auto operator()(Args&&...args)const noexcept ->decltype(this->m_ptr->operator()(Forward<Args>(args)...)) {
+					return this->m_ptr->operator()(Forward<Args>(args)...);
 				}
 				inline ConstIterType begin()const {
 					return this->m_ptr->begin();
