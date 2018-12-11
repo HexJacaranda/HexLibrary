@@ -403,29 +403,25 @@ namespace HL
 				bool Go(CapturePackage*Package, wchar_t const* Current) {
 					if (Package == nullptr)
 						return false;
+					CaptureInfo*info = nullptr;
 					if (m_anonymous_index != -1)
-					{
-						CaptureInfo&info = Package->AnonymousCapture[m_anonymous_index];
-						if (info.Size == 0)
-							info.Base = Current;
-						info.Size++;
-					}
+						info = &Package->AnonymousCapture[m_anonymous_index];
 					else
-					{
-						CaptureInfo&info = Package->NamedCapture[m_name];
-						if (info.Size == 0)
-							info.Base = Current;
-						info.Size++;
-					}
+						info = &Package->NamedCapture[m_name];
+					if (info->Size == 0)
+						info->Base = Current;
+					info->Size++;
 					return true;
 				}
 				void WithDraw(CapturePackage*Package) {
 					if (Package == nullptr)
 						return;
+					CaptureInfo*info = nullptr;
 					if (m_anonymous_index != -1)
-						Package->AnonymousCapture[m_anonymous_index].Size--;
+						info = &Package->AnonymousCapture[m_anonymous_index];
 					else
-						Package->NamedCapture[m_name].Size--;
+						info = &Package->NamedCapture[m_name];
+					info->Size--;
 				}
 				~Capture(){}
 			};
@@ -971,7 +967,7 @@ namespace HL
 					{
 						const wchar_t*end = StringFunction::GoUntil(token.Begin + 1, L'>');
 						size_t count = end - token.Begin - 1;
-						String name;
+						String name(count);
 						name.Append(token.Begin + 1, 0, count);
 						if (!m_named_index_table.Contains(name))
 							m_named_index_table.Add(name, Base - 1);
@@ -1141,13 +1137,13 @@ namespace HL
 				MatchResult(index_t Index, size_t Length, CapturePackage const& Capture) :m_index(Index), m_length(Length) {
 					for (auto&var : Capture.NamedCapture)
 					{
-						String str((size_t)0);
+						String str(var.Value().Size);
 						str.Append(var.Value().Base, 0, var.Value().Size);
 						m_named_capture.Add(var.Key(), str);
 					}
 					for (index_t i = 0; i < Capture.AnonymousCapture.Count(); ++i)
 					{
-						String str((size_t)0);
+						String str(Capture.AnonymousCapture[i].Size);
 						str.Append(Capture.AnonymousCapture[i].Base, 0, Capture.AnonymousCapture[i].Size);
 						m_anonymous_capture.Add(Move(str));
 					}
@@ -1173,69 +1169,36 @@ namespace HL
 					for (index_t i = 0; i < Target->Actions.Count(); ++i)
 						Target->Actions[i]->Go(Package, Current);
 				}
-				
 				static void CaptureWithdraw(Edge*Target, CapturePackage*Package) {
 					for (index_t i = 0; i < Target->Actions.Count(); ++i)
 						Target->Actions[i]->WithDraw(Package);
 				}
-
 				static const wchar_t* MatchUnit(const wchar_t*Target, const wchar_t*Top, Status*Where, CapturePackage*Package) {
 					if (Where->Final || Where->EquivalentFinal)//检查是否到达最终状态
 						return Target;
 					if (Target == Top)
 						if (Where->Final || Where->EquivalentFinal)
 							return Target;
-					if (Where->OutEdges.Count() == 1)
-					{
-						//单分支进行直接迭代
-						Status* iter = Where;
-						while (iter->OutEdges.Count() == 1) {
-							if (iter->OutEdges[0]->Content != nullptr)
-							{
-								if (Package != nullptr)
-									CaptureGo(iter->OutEdges[0], Target, Package);
-								if (!iter->OutEdges[0]->Content->Accept(*Target))
-								{
-									if (Package != nullptr)
-										CaptureWithdraw(iter->OutEdges[0], Package);
-									return nullptr;
-								}
-								Target++;
-							}
-							iter = iter->OutEdges[0]->To;
-
-							if (iter->Final || iter->EquivalentFinal)//检查是否到达最终状态
-								return Target;
-							if (Target == Top)
-								if (iter->Final || iter->EquivalentFinal)
-									return Target;
+					for (index_t i = 0; i < Where->OutEdges.Count(); ++i) {
+						if (Where->OutEdges[i]->Content == nullptr)
+						{
+							const wchar_t*ret = MatchUnit(Target, Top, Where->OutEdges[i]->To, Package);
+							if (ret != nullptr)
+								return ret;
 						}
-						return MatchUnit(Target, Top, iter, Package);
-					}
-					else
-					{
-						//多分枝
-						for (index_t i = 0; i < Where->OutEdges.Count(); ++i) {
-							if (Where->OutEdges[i]->Content == nullptr)
-							{
-								const wchar_t*ret = MatchUnit(Target, Top, Where->OutEdges[i]->To, Package);
-								if (ret != nullptr)
-									return ret;
-							}
-							else if (Where->OutEdges[i]->Content->Accept(*Target))
-							{
+						else if (Where->OutEdges[i]->Content->Accept(*Target))
+						{
+							if (Package != nullptr)
+								CaptureGo(Where->OutEdges[i], Target, Package);
+							const wchar_t*ret = MatchUnit(Target + 1, Top, Where->OutEdges[i]->To, Package);
+							if (ret != nullptr)
+								return ret;
+							else
 								if (Package != nullptr)
-									CaptureGo(Where->OutEdges[i], Target, Package);
-								const wchar_t*ret = MatchUnit(Target + 1, Top, Where->OutEdges[i]->To, Package);
-								if (ret != nullptr)
-									return ret;
-								else
-									if (Package != nullptr)
-										CaptureWithdraw(Where->OutEdges[i], Package);
-							}
+									CaptureWithdraw(Where->OutEdges[i], Package);
 						}
-						return nullptr;
 					}
+					return nullptr;
 				}
 				static bool IsMatchUnit(const wchar_t*Target, const wchar_t*Top, Status*Where, CapturePackage*Package) {
 					if (Where->Final || Where->EquivalentFinal)//检查是否到达最终状态
@@ -1308,6 +1271,24 @@ namespace HL
 				{
 					return IsMatchUnit(Target, Top, Where, nullptr);
 				}
+				static UPointer::uptr<Generic::Array<UPointer::uptr<MatchResult>>> Matches(const wchar_t*Target, const wchar_t*Top, Status*Where, size_t AnonymousLength, Generic::Dictionary<String, index_t>const&NamedTable) {
+					const wchar_t*iter = Target;
+					CapturePackage package(Target, AnonymousLength, NamedTable);
+					UPointer::uptr<Generic::Array<UPointer::uptr<MatchResult>>> ret = Reference::newptr<Generic::Array<UPointer::uptr<MatchResult>>>();
+					while (iter != Top)
+					{
+						const wchar_t* sub_ret = MatchUnit(iter, Top, Where, &package);
+						if (sub_ret != nullptr)
+						{
+							ret->Add(Reference::newptr<MatchResult>(iter - Target, sub_ret - Target, package));
+							iter = sub_ret;
+							package.SetToZero();
+						}
+						else
+							iter++;
+					}
+					return ret;
+				}
 			};
 			class Visualize
 			{
@@ -1368,7 +1349,6 @@ namespace HL
 					m_enter->Tail->Valid = true;
 					m_enter->Tail->Final = true;
 					NFASimplify::SimplifyNFA(m_resource, m_enter);
-					
 				}
 			public:
 				Regex(Regex&&lhs)noexcept {
@@ -1410,6 +1390,9 @@ namespace HL
 				//匹配第一个字符串
 				inline UPointer::uptr<MatchResult> MatchFirst(String const&Target)const {
 					return NFAMatch::MatchFirst(Target.GetData(), Target.GetData() + Target.Count(), m_enter->Head, m_parser->AnonymousCaptureTable().Count(), m_parser->NamedCaptureTable());
+				}
+				inline UPointer::uptr<Generic::Array<UPointer::uptr<MatchResult>>> Matches(String const&Target)const {
+					return NFAMatch::Matches(Target.GetData(), Target.GetData() + Target.Count(), m_enter->Head, m_parser->AnonymousCaptureTable().Count(), m_parser->NamedCaptureTable());
 				}
 				//获取源构造字符串
 				String const& GetPattern()const {
