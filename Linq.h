@@ -194,36 +194,36 @@ namespace HL
 				//根据条件选择
 				template<class Functor>
 				uptr<LinqQueryResult<T>> Where(Functor const& Target)const {
-					return newptr<LinqQueryResult<T>>(
-						newptr<WhereEnumerator<T, Functor>>(this->GetEnumerator(), Target)
+					return Reference::newptr<LinqQueryResult<T>>(
+						Reference::newptr<WhereEnumerator<T, Functor>>(this->GetEnumerator(), Target)
 						);
 				}
 				//根据成员选择
 				template<class Functor>
 				uptr<LinqQueryResult<typename Template::RemoveAllExtents<typename Template::GetFunctionInfo<Functor>::R>::T>> Select(Functor const& Target)const {
 					typedef typename Template::RemoveAllExtents<typename Template::GetFunctionInfo<Functor>::R>::T ToT;
-					return newptr<LinqQueryResult<ToT>>(
-						newptr<SelectEnumerator<T, ToT, Functor>>(this->GetEnumerator(), Target)
+					return Reference::newptr<LinqQueryResult<ToT>>(
+						Reference::newptr<SelectEnumerator<T, ToT, Functor>>(this->GetEnumerator(), Target)
 						);
 				}
 				//联合
 				template<class SecondT, class Functor>
 				uptr<LinqQueryResult<Generic::ObservePair<T, SecondT>>> Join(Iteration::IEnumerable<SecondT> const&Another, Functor const&Target)const {
-					return newptr<LinqQueryResult<Generic::ObservePair<T, SecondT>>>(
-						newptr<JoinEnumerator<T, SecondT, Functor>>(this->GetEnumerator(), Another.GetEnumerator(), Target)
+					return Reference::newptr<LinqQueryResult<Generic::ObservePair<T, SecondT>>>(
+						Reference::newptr<JoinEnumerator<T, SecondT, Functor>>(this->GetEnumerator(), Another.GetEnumerator(), Target)
 						);
 				}
 				//排序
 				template<class Functor> 
 				uptr<LinqQueryResult<T>> OrderBy(Functor const& compare, SortOrder order = SortOrder::Ascending)const
 				{
-					return newptr<LinqQueryResult<T>>(newptr<OrderEnumerator<T, Functor>>(this->GetEnumerator(), compare, order));
+					return Reference::newptr<LinqQueryResult<T>>(Reference::newptr<OrderEnumerator<T, Functor>>(this->GetEnumerator(), compare, order));
 				}
 				//排序
 				uptr<LinqQueryResult<T>> OrderBy(SortOrder order = SortOrder::Ascending)const
 				{
 					auto sort = [](T&l, T&r) {return l >= r ? 1 : -1; };
-					return newptr<LinqQueryResult<T>>(newptr<OrderEnumerator<T, decltype(sort)>>(this->GetEnumerator(), sort, order));
+					return Reference::newptr<LinqQueryResult<T>>(Reference::newptr<OrderEnumerator<T, decltype(sort)>>(this->GetEnumerator(), sort, order));
 				}
 			};
 

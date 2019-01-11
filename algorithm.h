@@ -91,7 +91,7 @@ namespace HL
 			template<class AnyT>
 			static index_t BinarySearch(const AnyT*Arr, size_t len, const AnyT&key)
 			{
-				index_t mid, front = 0, back = n - 1;
+				index_t mid, front = 0, back = len - 1;
 				while (front <= back)
 				{
 					mid = (front + back) / 2;
@@ -221,19 +221,23 @@ namespace HL
 				}
 			}
 			template<class IterT, class Fx>
-			void Foreach(IterT begin, IterT end, Fx func) {
+			void Foreach(IterT&&begin, IterT&&end, Fx func) {
 				for (IterT iter = begin; iter != end; ++iter) {
 					func(*iter);
 				}
 			}
 
-			template<class U,class T,class...Args>
+			template<class U, class...Args>
+			static bool Any(U const&Target, Args const&...Rest) {
+				return Any(Target, Rest...);
+			}
+			template<class U, class T, class...Args>
 			static bool Any(U const&Target, T const&First, Args const&...Rest) {
 				if (Target == First)
 					return true;
 				return Any(Target, Rest...);
 			}
-			template<class U, class T, class...Args>
+			template<class U, class T>
 			static bool Any(U const&Target, T const&First) {
 				return Target == First;
 			}
@@ -312,30 +316,6 @@ namespace HL
 							return (current_index - target_length + 1);
 					}
 					--current_index;
-				}
-			}
-			template<class CharT>
-			static void BasicStringIndexOfAll(const CharT*target_string, const CharT*source, Memory::MemoryManager<index_t>&Out, size_t target_length, size_t source_length, index_t start_index, index_t end_index) {
-				if (!target_string || !source)
-					return;
-				if (start_index > end_index)
-					return;
-				if (start_index < 0 && end_index >= source_length)
-					return;
-				if (end_index - start_index < target_length)
-					return;
-
-				index_t current_index = start_index;
-				for (;;)
-				{
-					index_t ret = BasicStringIndexOf(target_string, source, target_length, source_length, current_index, end_index);
-					if (ret == -1)
-						break;
-					else
-					{
-						current_index = ret + target_length;
-						Out.Append(ret);
-					}
 				}
 			}
 			template<class CharT>

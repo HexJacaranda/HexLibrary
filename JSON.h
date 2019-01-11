@@ -3,7 +3,20 @@ namespace HL
 {
 	namespace System
 	{
-		namespace Exception
+		template<>
+		struct Interface::EnumerableSupportInterface<Json::JsonArray>
+		{
+			typedef UPointer::uptr<Iteration::Iterator<Json::UJsonObject>> IteratorType;
+			typedef UPointer::uptr<Iteration::Iterator<Json::UJsonObject const>> ConstIteratorType;
+		};
+		template<>
+		struct Interface::EnumerableSupportInterface<Json::JsonObject>
+		{
+			typedef UPointer::uptr<Iteration::Iterator<Generic::ObservePair<String, Json::UIJsonValue>>> IteratorType;
+			typedef UPointer::uptr<Iteration::Iterator<Generic::ObservePair<String, Json::UIJsonValue const>>> ConstIteratorType;
+		};
+
+		namespace Json
 		{
 			class JsonParseException :public HL::Exception::IException
 			{
@@ -35,34 +48,6 @@ namespace HL
 					return exception_msg.GetData();
 				}
 			};
-		}
-		template<>
-		struct Interface::IndexerSupportInterface<Json::JsonArray>
-		{
-			typedef index_t IndexType;
-			typedef Json::UJsonObject ReturnType;
-		};
-		template<>
-		struct Interface::IndexerSupportInterface<Json::JsonObject>
-		{
-			typedef String IndexType;
-			typedef Json::UIJsonValue ReturnType;
-		};
-		template<>
-		struct Interface::EnumerableSupportInterface<Json::JsonArray>
-		{
-			typedef UPointer::uptr<Iteration::Iterator<Json::UJsonObject>> IteratorType;
-			typedef UPointer::uptr<Iteration::Iterator<Json::UJsonObject const>> ConstIteratorType;
-		};
-		template<>
-		struct Interface::EnumerableSupportInterface<Json::JsonObject>
-		{
-			typedef UPointer::uptr<Iteration::Iterator<Generic::ObservePair<String, Json::UIJsonValue>>> IteratorType;
-			typedef UPointer::uptr<Iteration::Iterator<Generic::ObservePair<String, Json::UIJsonValue const>>> ConstIteratorType;
-		};
-
-		namespace Json
-		{
 			enum class JsonValueType
 			{
 				Null,
@@ -94,9 +79,9 @@ namespace HL
 			public:
 				JsonObject() :IJsonValue(JsonValueType::Object) {}
 				JsonObject(ContainerT const&Pairs) :IJsonValue(JsonValueType::Object), m_pairs(Pairs) {}
-				JsonObject(ContainerT&& Pairs) :IJsonValue(JsonValueType::Object), m_pairs(Forward(Pairs)) {}
+				JsonObject(ContainerT&& Pairs) :IJsonValue(JsonValueType::Object), m_pairs(Move(Pairs)) {}
 				JsonObject(JsonObject const&rhs) :IJsonValue(JsonValueType::Object), m_pairs(rhs.m_pairs) {}
-				JsonObject(JsonObject &&lhs)noexcept :IJsonValue(JsonValueType::Object), m_pairs(Forward(lhs.m_pairs)) {}
+				JsonObject(JsonObject &&lhs)noexcept :IJsonValue(JsonValueType::Object), m_pairs(Move(lhs.m_pairs)) {}
 				JsonObject&operator=(JsonObject const&rhs)
 				{
 					this->m_pairs = rhs.m_pairs;
@@ -166,9 +151,9 @@ namespace HL
 			public:
 				JsonArray() :IJsonValue(JsonValueType::Array) {}
 				JsonArray(ContainerT const&list) :IJsonValue(JsonValueType::Array), m_list(list) {}
-				JsonArray(ContainerT &&list) :IJsonValue(JsonValueType::Array), m_list(Forward(list)) {}
+				JsonArray(ContainerT &&list) :IJsonValue(JsonValueType::Array), m_list(Move(list)) {}
 				JsonArray(JsonArray const&rhs) :IJsonValue(JsonValueType::Array), m_list(rhs.m_list) {}
-				JsonArray(JsonArray &&rhs)noexcept :IJsonValue(JsonValueType::Array), m_list(Forward(rhs.m_list)) {}
+				JsonArray(JsonArray &&rhs)noexcept :IJsonValue(JsonValueType::Array), m_list(Move(rhs.m_list)) {}
 				JsonArray&operator=(JsonArray const&rhs)
 				{
 					this->m_list = rhs.m_list;
@@ -226,7 +211,7 @@ namespace HL
 				JsonValue(String const&value, JsonValueType type) :IJsonValue(type), m_value(value) {}
 				JsonValue(double value_cache) :IJsonValue(JsonValueType::Number), m_value_cache(value_cache) {}
 				JsonValue(JsonValue const&rhs) :IJsonValue(rhs.m_value_type), m_value(rhs.m_value), m_value_cache(rhs.m_value_cache) {}
-				JsonValue(JsonValue &&lhs)noexcept :IJsonValue(lhs.m_value_type), m_value(Forward(lhs.m_value)), m_value_cache(lhs.m_value_cache) {}
+				JsonValue(JsonValue &&lhs)noexcept :IJsonValue(lhs.m_value_type), m_value(Move(lhs.m_value)), m_value_cache(lhs.m_value_cache) {}
 				JsonValue&operator=(JsonValue const& rhs) {
 					this->m_value = rhs.m_value;
 					this->m_value_cache = rhs.m_value_cache;
@@ -234,19 +219,19 @@ namespace HL
 					return *this;
 				}
 				JsonValue&operator=(JsonValue &&lhs)noexcept {
-					this->m_value = static_cast<String&&>(lhs.m_value);
+					this->m_value = Move(lhs.m_value);
 					this->m_value_cache = lhs.m_value_cache;
 					this->m_value_type = lhs.m_value_type;
 					return *this;
 				}
 				double AsDouble()const {
 					if (this->m_value_type != JsonValueType::Number)
-						HL::Exception::Throw<Exception::JsonRuntimeException>(L"Type not matched");
+						HL::Exception::Throw<JsonRuntimeException>(L"Type not matched");
 					return m_value_cache;
 				}
 				bool AsBoolean()const {
 					if (this->m_value_type != JsonValueType::Boolean)
-						HL::Exception::Throw<Exception::JsonRuntimeException>(L"Type not matched");
+						HL::Exception::Throw<JsonRuntimeException>(L"Type not matched");
 					if (m_value[0] == L't')
 						return true;
 					else
@@ -254,7 +239,7 @@ namespace HL
 				}
 				String const& AsString()const {
 					if (this->m_value_type != JsonValueType::String)
-						HL::Exception::Throw<Exception::JsonRuntimeException>(L"Type not matched");
+						HL::Exception::Throw<JsonRuntimeException>(L"Type not matched");
 					return m_value;
 				}
 				virtual ~JsonValue() = default;
@@ -292,7 +277,7 @@ namespace HL
 			private:
 				static void Throw(String const& Msg)
 				{
-					HL::Exception::Throw<Exception::JsonParseException>(Msg);
+					HL::Exception::Throw<JsonParseException>(Msg);
 				}
 				bool IsNull()const
 				{
@@ -518,10 +503,10 @@ namespace HL
 					case TokenType::ArrayEnd:
 						return ret;
 					default:
-						HL::Exception::Throw<Exception::JsonParseException>(L"Unexpected token");
+						HL::Exception::Throw<JsonParseException>(L"Unexpected token");
 					}
 				}
-				HL::Exception::Throw<Exception::JsonParseException>(L"Unexpected end");
+				HL::Exception::Throw<JsonParseException>(L"Unexpected end");
 				return nullptr;
 			}
 			UJsonObject JsonParser::ParseObject() {
@@ -550,35 +535,35 @@ namespace HL
 						break;
 					case TokenType::ObjectStart:
 						if (!is_represented)
-							HL::Exception::Throw<Exception::JsonParseException>(L"Object can only be values");
+							HL::Exception::Throw<JsonParseException>(L"Object can only be values");
 						value = ParseObject();
 						is_represented = false;
 						item_is_done = true;
 						break;
 					case TokenType::Boolean:
 						if (!is_represented)
-							HL::Exception::Throw<Exception::JsonParseException>(L"Booleans can only be values");
+							HL::Exception::Throw<JsonParseException>(L"Booleans can only be values");
 						value = Reference::newptr<JsonValue>(current.Value, JsonValueType::Boolean);
 						is_represented = false;
 						item_is_done = true;
 						break;
 					case TokenType::ArrayStart:
 						if (!is_represented)
-							HL::Exception::Throw<Exception::JsonParseException>(L"Array can only be values");
+							HL::Exception::Throw<JsonParseException>(L"Array can only be values");
 						value = InnerParseArray(false);
 						is_represented = false;
 						item_is_done = true;
 						break;
 					case TokenType::Number:
 						if (!is_represented)
-							HL::Exception::Throw<Exception::JsonParseException>(L"Numbers can only be values");
+							HL::Exception::Throw<JsonParseException>(L"Numbers can only be values");
 						value = Reference::newptr<JsonValue>(current.ValueCache);
 						is_represented = false;
 						item_is_done = true;
 						break;
 					case TokenType::Null:
 						if (!is_represented)
-							HL::Exception::Throw<Exception::JsonParseException>(L"Array can only be values");
+							HL::Exception::Throw<JsonParseException>(L"Null can only be values");
 						value = Reference::newptr<JsonValue>();
 						is_represented = false;
 						item_is_done = true;
@@ -593,7 +578,7 @@ namespace HL
 						item_is_done = false;
 					}
 				}
-				HL::Exception::Throw<Exception::JsonParseException>(L"Syntax error");
+				HL::Exception::Throw<JsonParseException>(L"Syntax error");
 				return nullptr;
 			}
 		}

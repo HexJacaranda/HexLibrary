@@ -35,7 +35,7 @@ namespace HL
 				public:
 					static inline UPointer::uobject Convert(T const&obj)
 					{
-						return newptr<T>(obj);
+						return Reference::newptr<T>(obj);
 					}
 				};
 				template<class T>

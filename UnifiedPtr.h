@@ -5,6 +5,7 @@ namespace HL
 	{
 		namespace UPointer
 		{
+
 			namespace Internal
 			{
 				static atomic_type InternalKeeperTypeID() {
@@ -204,6 +205,23 @@ namespace HL
 
 				operator T const&()const;
 				operator T&();
+			};
+
+
+			template<class U>
+			struct IsUPtr {
+				typedef U InnerType;
+				enum { R = false };
+			};
+			template<class U>
+			struct IsUPtr<uptr<U>> {
+				typedef U InnerType;
+				enum { R = true };
+			};
+			template<>
+			struct IsUPtr<uobject> {
+				typedef uobject InnerType;
+				enum { R = true };
 			};
 
 			//智能指针封箱统一化类型
@@ -988,23 +1006,6 @@ namespace HL
 				return this->m_ptr;
 			}
 
-
-
-			template<class U>
-			struct IsUPtr {
-				typedef U InnerType;
-				enum { R = false };
-			};
-			template<class U>
-			struct IsUPtr<uptr<U>> {
-				typedef U InnerType;
-				enum { R = true };
-			};
-			template<>
-			struct IsUPtr<uobject> {
-				typedef uobject InnerType;
-				enum { R = true };
-			};
 
 			template<class T>
 			inline uptr<T> UPtrThis<T>::GetThisUPtr() const

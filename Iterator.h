@@ -105,7 +105,7 @@ namespace HL
 				virtual uptr<IEnumerator<T>> GetEnumerator()const = 0;
 #if	_FOR_LOOP_SYNTACTIC_SUGAR //for”Ô∑®Ã«÷ß≥÷
 				inline uptr<Iterator<T>> begin()const {
-					return newptr<Iteration::Iterator<T>>(this->GetEnumerator());
+					return Reference::newptr<Iteration::Iterator<T>>(this->GetEnumerator());
 				}
 				inline uptr<Iterator<T>>& end()const {
 					return Iterator<T>::End();

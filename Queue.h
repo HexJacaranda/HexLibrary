@@ -122,7 +122,7 @@ namespace HL
 				}
 				T Dequeue() {
 					if (this->m_tail == nullptr)
-						Exception::Throw<UnHandledException>();
+						HL::Exception::Throw<HL::Exception::UnHandledException>();
 					Node*last = this->m_tail;
 					if (this->m_tail == this->m_head)
 					{

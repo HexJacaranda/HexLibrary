@@ -6,20 +6,6 @@ namespace HL
 	{
 		namespace Generic
 		{
-			//字典容器接口
-			template<class TKey, class TValue>
-			class IDictionary
-			{
-			public:
-				virtual void Add(TKey const&, TValue const&) = 0;
-				virtual bool Remove(TKey const&) = 0;
-				virtual bool Contains(TKey const&)const = 0;
-				virtual void Clear() = 0;
-				virtual TValue const&operator[](TKey const&)const = 0;
-				virtual TValue &operator[](TKey const&) = 0;
-				virtual ~IDictionary() {}
-			};
-
 			namespace Inner
 			{
 				class Helper
@@ -174,7 +160,7 @@ namespace HL
 
 			//字典容器
 			template<class TKey, class TValue>
-			class Dictionary sealed :public IDictionary<TKey, TValue>, public System::Interface::ICloneable,public Linq::LinqBase<ObservePair<TKey, TValue>>
+			class Dictionary sealed :public System::Interface::ICloneable,public Linq::LinqBase<ObservePair<TKey, TValue>>
 			{
 				template<class AnyT>
 				static atomic_type InnerGetHashCode(AnyT const&key) {
@@ -268,7 +254,7 @@ namespace HL
 				index_t FindEntry(TKey const&key)const {
 					if (m_buckets.Count() != 0) {
 						atomic_type hashCode = InnerGetHashCode(key) & 0x7FFFFFFF;
-						for (int i = m_buckets[hashCode % m_buckets.Count()]; i >= 0; i = m_entries[i].Next) {
+						for (index_t i = m_buckets[hashCode % m_buckets.Count()]; i >= 0; i = m_entries[i].Next) {
 							if (m_entries[i].Hash == hashCode) return i;
 						}
 					}
@@ -277,8 +263,7 @@ namespace HL
 			public:
 				Dictionary() {
 				}
-				//初始化
-				//[参数]Capticy:预留空间
+
 				Dictionary(size_t Capticy) {
 					Initialize(Capticy);
 				}
@@ -324,12 +309,11 @@ namespace HL
 					return m_count - m_freecount;
 				}
 				//插入元素
-				virtual void Add(TKey const&Key, TValue const&Value)final {
+				void Add(TKey const&Key, TValue const&Value) {
 					Insert(Key, Value, true);
 				}
-
 				//移除元素
-				virtual bool Remove(TKey const&Key)final {
+				bool Remove(TKey const&Key) {
 					if (m_buckets.Count() != 0) {
 						index_t hashCode = InnerGetHashCode(Key) & 0x7FFFFFFF;
 						index_t bucket = hashCode % m_buckets.Count();
@@ -361,14 +345,14 @@ namespace HL
 					return true;
 				}
 				//是否包含元素
-				virtual bool Contains(TKey const&Key)const final {
+				bool Contains(TKey const&Key)const {
 					index_t index = FindEntry(Key);
 					if (index < 0)
 						return false;
 					return true;
 				}
 				//清空
-				virtual void Clear() {
+				void Clear() {
 					if (m_count > 0) {
 						m_buckets.Clear();
 						m_entries.Clear();
@@ -378,14 +362,14 @@ namespace HL
 					}
 				}
 				//operator[]
-				virtual TValue const&operator[](TKey const&Key)const final {
+				TValue const&operator[](TKey const&Key)const {
 					index_t index = FindEntry(Key);
 					if (index < 0)
 						HL::Exception::Throw<HL::Exception::KeyNotFoundException>();
 					return *m_entries[index].Value;
 				}
 				//operator[]
-				virtual TValue &operator[](TKey const&Key)final {
+				TValue &operator[](TKey const&Key) {
 					index_t index = FindEntry(Key);
 					if (index < 0)
 						HL::Exception::Throw<HL::Exception::KeyNotFoundException>();
@@ -395,7 +379,7 @@ namespace HL
 					return new Dictionary(*this);
 				}
 				virtual uptr<Iteration::IEnumerator<ObservePair<TKey, TValue>>> GetEnumerator()const {
-					return newptr<DictionaryEnumerator<TKey, TValue>>(
+					return Reference::newptr<DictionaryEnumerator<TKey, TValue>>(
 						const_cast<Entry*>(this->m_entries.GetData()), const_cast<Entry*>(this->m_entries.GetData() + this->m_entries.Count())
 						);
 				}
@@ -406,13 +390,6 @@ namespace HL
 				}
 			};
 		}
-		//配置uptr
-		template<class TKey,class TValue>
-		struct Interface::IndexerSupportInterface<Generic::Dictionary<TKey, TValue>>
-		{
-			typedef TKey IndexType;
-			typedef TValue ReturnType;
-		};
 		template<class TKey, class TValue>
 		struct Interface::EnumerableSupportInterface<Generic::Dictionary<TKey, TValue>>
 		{

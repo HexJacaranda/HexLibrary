@@ -164,12 +164,12 @@ namespace HL
 				}
 				Array(size_t size) :data(size) {}
 				//向数组中添加元素
-				virtual void Add(T const&object) {
+				void Add(T const&object) {
 					data.Append(object);
 				}
 				//向数组中添加元素
 				void Add(T &&object) {
-					data.Append(object);
+					data.Append(Move(object));
 				}
 				//向数组中添加另一数组全部元素
 				void Add(Array const&rhs) {
@@ -200,7 +200,7 @@ namespace HL
 						this->data.Append(array_ptr + index, count);
 				}
 				//移除指定处元素
-				virtual void RemoveAt(index_t index) {
+				void RemoveAt(index_t index) {
 					if (index < this->Count())
 						data.Remove(index, index);
 				}
@@ -404,7 +404,7 @@ namespace HL
 					return this->data.GetUsedSize() == 0;
 				}
 				//获得数组长度
-				virtual size_t Count()const {
+				size_t Count()const {
 					return this->data.GetUsedSize();
 				}
 				//获得最大容量
@@ -425,13 +425,13 @@ namespace HL
 					return this->data.GetMemoryBlock();
 				}
 				//索引器
-				virtual T const&operator[](index_t index)const {
+				T const&operator[](index_t index)const {
 					if (index < 0 || index >= this->Count())
 						HL::Exception::Throw<HL::Exception::IndexOutOfException>(index, this->Count() - 1);
 					return this->data[index];
 				}
 				//索引器
-				virtual T &operator[](index_t index) {
+				T &operator[](index_t index) {
 					if (index < 0 || index >= this->Count())
 						HL::Exception::Throw<HL::Exception::IndexOutOfException>(index, this->Count() - 1);
 					return this->data[index];
@@ -465,7 +465,7 @@ namespace HL
 				//其他特性
 				virtual uptr<Iteration::IEnumerator<T>> GetEnumerator()const final
 				{
-					return newptr<IterT>(const_cast<T*>(this->data.GetMemoryBlock()), const_cast<T*>(this->data.GetMemoryBlock() + this->data.GetUsedSize()));
+					return Reference::newptr<IterT>(const_cast<T*>(this->data.GetMemoryBlock()), const_cast<T*>(this->data.GetMemoryBlock() + this->data.GetUsedSize()));
 				}
 				//循环迭代
 				template<class Fx>
@@ -483,20 +483,6 @@ namespace HL
 				}
 			};
 
-			///////////////////////uptr接口声明
-			template<class T>
-			struct Interface::IndexerSupportInterface<Array<T>>
-			{
-				typedef index_t IndexType;
-				typedef T ReturnType;
-			};
-
-			template<class T>
-			struct Interface::IndexerSupportInterface<array<T>>
-			{
-				typedef index_t IndexType;
-				typedef T ReturnType;
-			};
 
 			template<class T>
 			struct Interface::EnumerableSupportInterface<Array<T>>

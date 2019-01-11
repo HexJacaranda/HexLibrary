@@ -134,7 +134,7 @@ namespace HL
 				template<class Functor,class...Args>
 				UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> Then(Functor Target,Args const&...args) {
 					m_task_package->CurrentThread->Join();
-					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target), nullptr, params(args...));
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target), nullptr, Functional::params(args...));
 					GC::newgc<Thread>(package)->Go();
 					return Reference::newptr<Task<typename Template::GetFunctionInfo<Functor>::R>>(package);
 				}
@@ -142,7 +142,7 @@ namespace HL
 				template<class T,class...Args>
 				UPointer::uptr<Task<T>> Then(Functional::Delegate<Functional::Auto>const& Target, Args const&...args) {
 					m_task_package->CurrentThread->Join();
-					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, nullptr, params(args...));
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, nullptr, Functional::params(args...));
 					GC::newgc<Thread>(package)->Go();
 					return Reference::newptr<Task<T>>(package);
 				}
@@ -150,46 +150,45 @@ namespace HL
 				template<class Functor,class TT,class...Args>
 				UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> ThenWith(Functor Target, TT*Object, Args const&...args) {
 					m_task_package->CurrentThread->Join();
-					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target, Object), nullptr, params(args...));
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target, Object), nullptr, Functional::params(args...));
 					GC::newgc<Thread>(package)->Go();
 					return Reference::newptr<Task<typename Template::GetFunctionInfo<Functor>::R>>(package);
 				}
 				template<class T,class...Args>
 				UPointer::uptr<Task<T>> ThenWith(Functional::Delegate<Functional::Auto> const&Target, UPointer::uobject const&Object, Args const&...args) {
 					m_task_package->CurrentThread->Join();
-					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, Object, params(args...));
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, Object, Functional::params(args...));
 					GC::newgc<Thread>(package)->Go();
 					return Reference::newptr<Task<T>>(package);
 				}
 				//异步执行
 				template<class T,class...Args>
 				static UPointer::uptr<Task<T>> RunVia(Functional::Delegate<Functional::Auto> const&Target, Args const&...args) {
-					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, nullptr, params(args...));
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, nullptr, Functional::params(args...));
 					GC::newgc<Threading::Thread>(package)->Go();
 					return Reference::newptr<Task<T>>(package);
 				}
 				//异步执行
 				template<class T, class...Args>
 				static UPointer::uptr<Task<T>> RunViaWith(Functional::Delegate<Functional::Auto> const&Target, UPointer::uobject const& Object, Args const&...args) {
-					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, Object, params(args...));
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Target, Object, Functional::params(args...));
 					GC::newgc<Threading::Thread>(package)->Go();
 					return Reference::newptr<Task<T>>(package);
 				}
 				//异步执行
 				template<class Functor,class...Args>
 				static UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> Run(Functor Target,Args const&...args) {
-					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target), nullptr, params(args...));
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target), nullptr, Functional::params(args...));
 					GC::newgc<Threading::Thread>(package)->Go();
 					return Reference::newptr<Task<typename Template::GetFunctionInfo<Functor>::R>>(package);
 				}
 				//异步执行
 				template<class Functor, class TT, class...Args>
 				static UPointer::uptr<Task<typename Template::GetFunctionInfo<Functor>::R>> RunWith(Functor Target, TT*Object, Args const&...args) {
-					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target, Object), nullptr, params(args...));
+					UPointer::uptr<TaskPackage> package = Reference::newptr<TaskPackage>(Functional::Bind(Target, Object), nullptr, Functional::params(args...));
 					GC::newgc<Threading::Thread>(package)->Go();
 					return Reference::newptr<Task<typename Template::GetFunctionInfo<Functor>::R>>(package);
 				}
-
 			};
 		}
 	}

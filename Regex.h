@@ -194,7 +194,7 @@ namespace HL
 				}
 				Pool& operator=(Pool &&lhs) {
 					this->m_objects = Move(lhs);
-					return *this
+					return *this;
 				}
 				T* Add(T*Target) {
 					m_objects.Add((intptr_t)Target, Target);
@@ -460,6 +460,8 @@ namespace HL
 				bool Visited = false;
 				//等效结束
 				bool EquivalentFinal = false;
+				//从该节点到结束状态的深度
+				size_t Depth = 0;
 			};
 			//资源
 			class NFAResource
@@ -480,6 +482,7 @@ namespace HL
 				NFA() :Head(nullptr), Tail(nullptr) {}
 				Status*Head;
 				Status*Tail;
+				bool Greedy = true;
 				//构造节点
 				void BuildNode(BasicContent*Content)
 				{
@@ -572,10 +575,10 @@ namespace HL
 					out->BuildNode(nullptr);
 					Token token;
 					m_tokenizer.Peek(token);//Peek一个
-					bool not= false;//取反
+					bool complementary = false;//取反
 					if (token.Type == TokenType::Pow)//取反
 					{
-						not= true;
+						complementary = true;
 						m_tokenizer.Consume(token);//前进
 					}
 					while (!m_tokenizer.Done())
@@ -598,7 +601,7 @@ namespace HL
 							}
 							else
 								right = left;
-							out->Parallel(NewEdge(this->m_resource->ContentPool.CreateAndAppend(left, right, not)));
+							out->Parallel(NewEdge(this->m_resource->ContentPool.CreateAndAppend(left, right, complementary)));
 						}
 					}
 					return out;
@@ -939,11 +942,9 @@ namespace HL
 						return nullptr;
 					}
 					m_tokenizer.Peek(token);
-					if (token.Type == TokenType::QMark)//非贪婪匹配
-					{
-						//TODO
-					}
 					ret = Repeat(Parsed, Base, Top, left, right);
+					if (token.Type == TokenType::QMark&&ret != nullptr)//非贪婪匹配
+						ret->Greedy = false;
 					return ret;
 				}
 				//Parse捕获组
@@ -1027,6 +1028,14 @@ namespace HL
 			class NFASimplify
 			{
 			public:
+				//计算路径深度
+				static void CaculatePathDepth() {
+
+				}
+				//根据路径深度重排顺序
+				static void SortPathByPriority() {
+
+				}
 				//标记所有有效状态
 				static void MarkValidStatus(Pool<Status> &Target) {
 					for (auto&var : Target.GetContainer())
@@ -1125,6 +1134,8 @@ namespace HL
 					MarkEquivalentEndStatus(Pool->StatusPool);
 					return Target;
 				}
+
+
 			};
 			//匹配结果
 			class MatchResult
@@ -1369,7 +1380,7 @@ namespace HL
 					From(rhs.m_pattern);
 					return *this;
 				}
-				Regex&operator=(Regex&&lhs)
+				Regex&operator=(Regex&&lhs)noexcept
 				{
 					Clear();
 					m_pattern = Move(lhs.m_pattern);
