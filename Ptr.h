@@ -150,7 +150,7 @@ namespace HL
 			System::UPointer::uptr<U> newptr(Args &&...args) {
 				InternalAdopt::reference_keeper*ptr = System::UPointer::keeper_interface<InternalAdopt::reference_keeper>();
 				InternalAdopt::reference_resource<U>*resource_ptr = new InternalAdopt::reference_resource<U>;
-				U*object = new U(args...);
+				U*object = new U(Forward<Args>(args)...);
 				resource_ptr->object = object;
 				resource_ptr->reference_counter = 1;
 				return System::UPointer::uptr<U>(object, resource_ptr, ptr);
@@ -160,7 +160,7 @@ namespace HL
 			System::UPointer::uptr<U> new_unique(Args &&...args) {
 				InternalAdopt::unique_keeper*ptr = System::UPointer::keeper_interface<InternalAdopt::unique_keeper>();
 				InternalAdopt::unique_resource<U>*resource_ptr = new InternalAdopt::unique_resource<U>;
-				U*object = new U(args...);
+				U*object = new U(Forward<Args>(args)...);
 				resource_ptr->object = object;
 				return System::UPointer::uptr<U>(object, resource_ptr, ptr);
 			}

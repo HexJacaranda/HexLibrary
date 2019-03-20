@@ -1,400 +1,316 @@
 #pragma once
-#include <math.h>
 namespace HL
 {
 	namespace System
 	{
-		namespace Generic
+		namespace Collection
 		{
-			namespace Inner
+			namespace Generic
 			{
-				class Helper
+				class DictionaryHelper
 				{
 					static size_t m_count;
 					static size_t m_primes[];
 				public:
+					static constexpr size_t Null = ((size_t)1 << sizeof(size_t) * 4) - 1;
 					static bool IsPrime(size_t candidate)
 					{
 						if ((candidate & 1) != 0)
 						{
 							size_t limit = (size_t)sqrt(candidate);
 							for (size_t divisor = 3; divisor <= limit; divisor += 2)
-							{
 								if ((candidate % divisor) == 0)
 									return false;
-							}
 							return true;
 						}
 						return (candidate == 2);
 					}
 					static size_t GetPrime(size_t min) {
-						for (int i = 0; i < m_count; i++)
-						{
+						for (size_t i = 0; i < m_count; i++)
 							if (m_primes[i] >= min) return m_primes[i];
-						}
-						//ToDo
-						for (int i = (min | 1); i < 2147483647; i += 2)
-						{
+						for (size_t i = (min | 1); i < 2147483647; i += 2)
 							if (IsPrime(i) && ((i - 1) % 101 != 0))
 								return i;
-						}
 						return min;
 					}
 				};
-				size_t Helper::m_primes[] = {
+				size_t DictionaryHelper::m_primes[] = {
 					3, 7, 11, 17, 23, 29, 37, 47, 59, 71, 89, 107, 131, 163, 197, 239, 293, 353, 431, 521, 631, 761, 919,
 					1103, 1327, 1597, 1931, 2333, 2801, 3371, 4049, 4861, 5839, 7013, 8419, 10103, 12143, 14591,
 					17519, 21023, 25229, 30293, 36353, 43627, 52361, 62851, 75431, 90523, 108631, 130363, 156437,
 					187751, 225307, 270371, 324449, 389357, 467237, 560689, 672827, 807403, 968897, 1162687, 1395263,
 					1674319, 2009191, 2411033, 2893249, 3471899, 4166287, 4999559, 5999471, 7199369 };
-				size_t Helper::m_count = sizeof(Helper::m_primes) / sizeof(size_t);
+				size_t DictionaryHelper::m_count = sizeof(DictionaryHelper::m_primes) / sizeof(size_t);
 
 				template<class TKey,class TValue>
-				struct EntryPair
+				class KeyValuePair
 				{
-					atomic_type Hash = -1;
-					atomic_type Next = 0;
-					TKey*Key = nullptr;
-					TValue*Value = nullptr;
-					EntryPair(EntryPair const&rhs)
-					{
-						if (rhs.Key)
-							this->Key = new TKey(*rhs.Key);
-						if (rhs.Value)
-							this->Value = new TValue(*rhs.Value);
-						this->Hash = rhs.Hash;
-						this->Next = rhs.Next;
+					Nullable::Nullable<TKey> m_key;
+					Nullable::Nullable<TValue> m_value;
+				public:
+					template<class Left,class Right>
+					KeyValuePair(Left&&key, Right&&value)
+						: m_key(std::forward<Left>(key)), m_value(std::forward<Right>(value)) {}
+					KeyValuePair(KeyValuePair const&) = default;
+					KeyValuePair(KeyValuePair&&) = default;
+					KeyValuePair& operator=(KeyValuePair const&) = default;
+					KeyValuePair& operator=(KeyValuePair&&)noexcept = default;
+					void SetNull() {
+						m_key = nullptr;
+						m_value = nullptr;
 					}
-					EntryPair(EntryPair &&lhs)noexcept
-					{
-						this->Key = lhs.Key;
-						this->Value = lhs.Value;
-						this->Hash = lhs.Hash;
-						this->Next = lhs.Next;
-						lhs.Key = nullptr;
-						lhs.Value = nullptr;
+					inline TKey& Key()noexcept {
+						return this->m_key.GetObject();
 					}
-					EntryPair() {
-						Hash = -1;
+					inline TKey const& Key()const noexcept {
+						return this->m_key.GetObject();
 					}
-					EntryPair&operator=(EntryPair const&rhs)
-					{
-						this->Clear();
-						if (rhs.Key)
-							this->Key = new TKey(*rhs.Key);
-						if (rhs.Value)
-							this->Value = new TValue(*rhs.Value);
-						this->Hash = rhs.Hash;
-						this->Next = rhs.Next;
+					inline TValue& Value()noexcept {
+						return this->m_value.GetObject();
+					}
+					inline TValue const& Value()const noexcept {
+						return this->m_value.GetObject();
+					}
+					~KeyValuePair() {}
+				};
+				
+				template<class TKey,class TValue>
+				class Entry
+				{
+				public:
+					size_t HashCode = 0;
+					size_t NextIndex = DictionaryHelper::Null;
+					KeyValuePair<TKey, TValue> Object;
+					Entry(Entry const&) = default;
+					Entry(Entry&&) = default;
+					Entry& operator=(Entry const&) = default;
+					Entry& operator=(Entry&&) = default;
+					~Entry() = default;
+				};
+
+				template<class TKey,class TValue>
+				class DictionaryIterator
+				{
+					typedef Entry<TKey, TValue> EntryT;
+					EntryT*m_iterator = nullptr;
+					EntryT*m_end = nullptr;
+					KeyValuePair<TKey, TValue>*m_object = nullptr;
+				public:
+					DictionaryIterator(EntryT*Iterator, EntryT*End)
+						:m_iterator(Iterator), m_end(End) {
+						if (m_iterator != m_end)
+							m_object = &m_iterator->Object;
+					}
+					DictionaryIterator& operator++() {
+						while (m_iterator != m_end)
+						{
+							m_iterator++;
+							if (m_iterator->HashCode > 0)
+							{
+								m_object = &m_iterator->Object;
+								break;
+							}
+						}
 						return *this;
 					}
-					EntryPair&operator=(EntryPair&&lhs)
-					{
-						this->Clear();
-						this->Key = lhs.Key;
-						this->Value = lhs.Value;
-						this->Hash = lhs.Hash;
-						this->Next = lhs.Next;
-						lhs.Key = nullptr;
-						lhs.Value = nullptr;
-						return *this;
+					KeyValuePair<TKey, TValue>& operator*() {
+						return *this->m_object;
+					}
+					KeyValuePair<TKey, TValue> const& operator*()const {
+						return *this->m_object;
+					}
+					inline bool operator==(DictionaryIterator const&other)const noexcept {
+						return this->m_iterator == other.m_iterator;
+					}
+					inline bool operator!=(DictionaryIterator const&other)const noexcept {
+						return this->m_iterator != other.m_iterator;
+					}
+					~DictionaryIterator() {
+					}
+				};
+
+				template<class TKey,class TValue>
+				class Dictionary :public Linq::LinqBase<DictionaryIterator<TKey, TValue>, Dictionary<TKey, TValue>>
+				{
+					typedef Entry<TKey, TValue> EntryT;
+					Collection::Generic::Array<EntryT> m_entries;
+					Collection::Generic::Array<size_t> m_buckets;
+					size_t m_free_list_index = DictionaryHelper::Null;
+					size_t m_free_count = 0;
+					size_t m_count = 0;
+				private:
+					void Initialize(size_t capcity) {
+						size_t size = DictionaryHelper::GetPrime(capcity);
+						m_buckets.AdjustTo(size);
+						for (size_t i = 0; i < m_buckets.Count(); i++) 
+							m_buckets[i] = DictionaryHelper::Null;
+						m_entries.AdjustTo(size);
+						m_free_list_index = DictionaryHelper::Null;
+					}
+					void Resize(size_t new_size, bool forced_new_hash) {
+						m_entries.AdjustTo(new_size);
+						m_buckets.AdjustTo(new_size);
+						for (size_t i = 0; i < m_buckets.Count(); i++) m_buckets[i] = DictionaryHelper::Null;
+						//强制重新计算Hash值
+						if (forced_new_hash) {
+							for (size_t i = 0; i < m_count; i++)
+								if (m_entries[i].HashCode > 0)
+									m_entries[i].HashCode = Hash::IHash::GetHashCode(m_entries[i].Object.Key()) & 0x7FFFFFFF;
+						}
+						for (size_t i = 0; i < m_count; i++) {
+							if (m_entries[i].HashCode > 0) {
+								size_t bucket = m_entries[i].HashCode % new_size;
+								m_entries[i].NextIndex = m_buckets[bucket];
+								m_buckets[bucket] = i;
+							}
+						}
+					}
+					inline void Resize() {
+						Resize(DictionaryHelper::GetPrime(2 * this->m_count), false);
+					}
+					size_t FindInsertIndex(TKey const&key, bool add) {
+						if (m_buckets.Count() == 0) 
+							Initialize(0);
+						size_t hash_code = Hash::IHash::GetHashCode(key) & 0x7FFFFFFF;
+						size_t target_bucket = hash_code % m_buckets.Count();
+						size_t collision_count = 0;
+
+						for (size_t i = m_buckets[target_bucket]; i != DictionaryHelper::Null; i = m_entries[i].NextIndex)
+						{
+							if (m_entries[i].HashCode == hash_code)
+								return add ? DictionaryHelper::Null : i;
+							collision_count++;
+						}
+						size_t index;
+						if (m_free_count >0) {
+							index = m_free_list_index;
+							m_free_list_index = m_entries[index].NextIndex;
+							m_free_count--;
+						}
+						else
+						{
+							if (m_count == m_entries.Count())
+							{
+								Resize();
+								target_bucket = hash_code % m_buckets.Count();
+							}
+							index = m_count;
+							m_count++;
+						}
+						m_entries[index].HashCode = hash_code;
+						m_entries[index].NextIndex = m_buckets[target_bucket];
+						m_buckets[target_bucket] = index;
+						return index;
+					}
+					size_t FindEntry(TKey const&key)const {
+						if (m_buckets.Count() != 0) {
+							size_t hash_code = Hash::IHash::GetHashCode(key) & 0x7FFFFFFF;
+							for (size_t i = m_buckets[hash_code % m_buckets.Count()]; i != DictionaryHelper::Null; i = m_entries[i].NextIndex)
+								if (m_entries[i].HashCode == hash_code) return i;
+						}
+						return DictionaryHelper::Null;
+					}
+					size_t FindEntryByHash(size_t hash)const {
+						if (m_buckets.Count() != 0) {
+							size_t hash_code = hash & 0x7FFFFFFF;
+							for (size_t i = m_buckets[hash_code % m_buckets.Count()]; i != DictionaryHelper::Null; i = m_entries[i].NextIndex)
+								if (m_entries[i].HashCode == hash_code) return i;
+						}
+						return DictionaryHelper::Null;
+					}
+					bool RemoveBy(TKey const&Key) {
+						if (m_buckets.Count() != 0) {
+							size_t hash_code = Hash::IHash::GetHashCode(Key) & 0x7FFFFFFF;
+							size_t bucket = hash_code % m_buckets.Count();
+							size_t last = DictionaryHelper::Null;
+							for (size_t i = m_buckets[bucket]; i != DictionaryHelper::Null; last = i, i = m_entries[i].NextIndex) {
+								if (m_entries[i].HashCode == hash_code) {
+									if (last == DictionaryHelper::Null)
+										m_buckets[bucket] = m_entries[i].NextIndex;
+									else
+										m_entries[last].NextIndex = m_entries[i].NextIndex;
+									m_entries[i].Object.SetNull();
+									m_entries[i].HashCode = 0;
+									m_entries[i].NextIndex = m_free_list_index;
+									m_free_list_index = i;
+									m_free_count++;
+									return true;
+								}
+							}
+						}
+						return false;
+					}
+				public:
+					Dictionary() {}
+					Dictionary(size_t Capacity) {
+						Initialize(Capacity);
+					}
+					Dictionary(Dictionary const&) = default;
+					Dictionary(Dictionary&&)noexcept = default;
+					Dictionary&operator=(Dictionary const&) = default;
+					Dictionary&operator=(Dictionary&&) = default;
+					~Dictionary() {}
+
+					void Add(TKey const&Key, TValue const&Value) {
+						Add(KeyValuePair<TKey, TValue>(Key, Value));
+					}
+					void Add(KeyValuePair<TKey, TValue> const&Pair) {
+						size_t index = FindInsertIndex(Pair.Key(), true);
+						if (index == DictionaryHelper::Null) {
+
+						}
+						m_entries[index].Object = Pair;
+					}
+					void Add(KeyValuePair<TKey, TValue>&&Pair) {
+						size_t index = FindInsertIndex(Pair.Key(), true);
+						if (index == DictionaryHelper::Null) {
+
+						}
+						m_entries[index].Object = std::move(Pair);
+					}
+					inline bool Contains(TKey const&Key)const {
+						return FindEntry(Key) != DictionaryHelper::Null;
+					}
+					void Remove(TKey const&Key) {
+						RemoveBy(Key);
+					}
+					inline size_t Count()const noexcept {
+						return this->m_count;
 					}
 					void Clear() {
-						if (Key != nullptr)
-						{
-							delete Key;
-							Key = nullptr;
-						}
-						if (Value != nullptr) {
-							delete Value;
-							Value = nullptr;
-						}
-						Hash = -1;
+						m_entries.Clear();
+						m_buckets.Clear();
+						m_free_count = 0;
+						m_count = 0;
+						m_free_list_index = DictionaryHelper::Null;
 					}
-					~EntryPair() {
-						Clear();
+					inline TValue& ByHash(size_t Hash) {
+						return m_entries[FindEntryByHash(Hash)].Object.Value();
+					}
+					inline TValue const& ByHash(size_t Hash)const {
+						return m_entries[FindEntryByHash(Hash)].Object.Value();
+					}
+					inline TValue& operator[](TKey const&Key) {
+						return m_entries[FindEntry(Key)].Object.Value();
+					}
+					inline TValue const& operator[](TKey const&Key)const {
+						return m_entries[FindEntry(Key)].Object.Value();
+					}
+					typedef DictionaryIterator<TKey, TValue> IteratorT;
+					inline IteratorT begin() {
+						return IteratorT(this->m_entries.begin(), this->m_entries.end());
+					}
+					inline IteratorT end() {
+						return IteratorT(this->m_entries.end(), this->m_entries.end());
+					}
+					inline IteratorT begin()const {
+						return IteratorT((EntryT*)this->m_entries.begin(), (EntryT*)this->m_entries.end());
+					}
+					inline IteratorT end()const {
+						return IteratorT((EntryT*)this->m_entries.end(), (EntryT*)this->m_entries.end());
 					}
 				};
 			}
-			template<class TKey, class TValue>
-			class DictionaryEnumerator :public Iteration::IEnumerator<ObservePair<TKey,TValue>>
-			{
-				typedef Inner::EntryPair<TKey, TValue> Entry;
-				typedef Iteration::IEnumerator<ObservePair<TKey, TValue>> Base;
-				typedef ObservePair<TKey, TValue> T;
-				T m_current;
-				Entry * m_iter;
-				Entry * m_end;
-			public:
-				DictionaryEnumerator(Entry * begin, Entry * end) :m_iter(begin), m_end(end) {
-					if (this->MoveNext() == Iteration::EnumerationResult::EOE)
-						this->CurrentObject = nullptr;
-					else
-						this->CurrentObject = &m_current;
-				}
-				DictionaryEnumerator(DictionaryEnumerator const&rhs) :m_current(rhs.m_current), m_iter(rhs.m_iter), m_end(rhs.m_end), Base(&this->m_current) {}
-				virtual Iteration::EnumerationResult MoveNext() final {
-					while (m_iter != m_end)
-					{	
-						if (m_iter->Hash > 0)
-						{
-							m_current.Key(*m_iter->Key);
-							m_current.Value(*m_iter->Value);
-							m_iter++;
-							return Iteration::EnumerationResult::Successful;
-						}
-						m_iter++;
-					}
-					return Iteration::EnumerationResult::EOE;
-				}
-				virtual DictionaryEnumerator& operator=(Iteration::IEnumerator<T>const&rhs)final {
-					this->m_iter = static_cast<DictionaryEnumerator const&>(rhs).m_iter;
-					this->m_end = static_cast<DictionaryEnumerator const&>(rhs).m_end;
-					this->m_current = static_cast<DictionaryEnumerator const&>(rhs).m_current;
-					return *this;
-				}
-				virtual void* ClonePtr()const final {
-					return new DictionaryEnumerator(*this);
-				}
-			};
-
-			//字典容器
-			template<class TKey, class TValue>
-			class Dictionary sealed :public System::Interface::ICloneable,public Linq::LinqBase<ObservePair<TKey, TValue>>
-			{
-				template<class AnyT>
-				static atomic_type InnerGetHashCode(AnyT const&key) {
-					if (Template::IsBaseOf<System::Hash::ISupportHash, AnyT>::R)
-					{
-						System::Hash::ISupportHash* ptr = (System::Hash::ISupportHash*)(const_cast<AnyT*>(&key));
-						return ptr->GetHashCode();
-					}
-					else 
-					{
-						return Hash::Hash::HashSeq(&key);
-					}
-				}
-				typedef Inner::EntryPair<TKey, TValue> Entry;
-				System::Generic::array<Entry> m_entries;
-				System::Generic::array<atomic_type> m_buckets;
-				size_t m_count = 0;
-				atomic_type m_freelist = 0;
-				atomic_type m_freecount = 0;
-				void Initialize(size_t capcity) {
-					size_t size = Inner::Helper::GetPrime(capcity);
-					m_buckets = array<atomic_type>(size);
-					for (int i = 0; i < m_buckets.Count(); i++) m_buckets[i] = -1;
-					m_entries = array<Entry>(size);
-					m_freelist = -1;
-				}
-
-				void Resize(size_t newSize, bool forceNewHashCodes) {
-					m_entries.ExpandTo(newSize);
-					m_buckets.ExpandTo(newSize);
-
-					for (int i = 0; i < m_buckets.Count(); i++) m_buckets[i] = -1;
-
-					if (forceNewHashCodes) {
-						for (index_t i = 0; i < m_count; i++) {
-							if (m_entries[i].Hash != -1) {
-								m_entries[i].Hash = (InnerGetHashCode(*m_entries[i].Key) & 0x7FFFFFFF);
-							}
-						}
-					}
-					for (int i = 0; i < m_count; i++) {
-						if (m_entries[i].Hash >= 0) {
-							atomic_type bucket = m_entries[i].Hash % newSize;
-							m_entries[i].Next = m_buckets[bucket];
-							m_buckets[bucket] = i;
-						}
-					}
-				}
-
-				void Resize() {
-					Resize(Inner::Helper::GetPrime(2 * this->m_count), false);
-				}
-
-				void Insert(TKey const& key, TValue const&value, bool add) {
-					if (m_buckets.Count() == 0) Initialize(0);
-					atomic_type hashCode = InnerGetHashCode(key) & 0x7FFFFFFF;
-					size_t targetBucket = hashCode % m_buckets.Count();
-					size_t collisionCount = 0;
-					for (atomic_type i = m_buckets[targetBucket]; i >= 0; i = m_entries[i].Next) {
-						if (m_entries[i].Hash == hashCode) {
-							if (add)
-							{
-								HL::Exception::Throw<HL::Exception::UnHandledException>();
-							}
-							m_entries[i].Value = new TValue(value);
-							return;
-						}
-					}
-					atomic_type index;
-					if (m_freecount > 0) {
-						index = m_freelist;
-						m_freelist = m_entries[index].Next;
-						m_freecount--;
-					}
-					else {
-						if (m_count == m_entries.Count())
-						{
-							Resize();
-							targetBucket = hashCode % m_buckets.Count();
-						}
-						index = m_count;
-						m_count++;
-					}
-					m_entries[index].Hash = hashCode;
-					m_entries[index].Next = m_buckets[targetBucket];
-					m_entries[index].Key = new TKey(key);
-					m_entries[index].Value = new TValue(value);
-					m_buckets[targetBucket] = index;
-				}
-
-				index_t FindEntry(TKey const&key)const {
-					if (m_buckets.Count() != 0) {
-						atomic_type hashCode = InnerGetHashCode(key) & 0x7FFFFFFF;
-						for (index_t i = m_buckets[hashCode % m_buckets.Count()]; i >= 0; i = m_entries[i].Next) {
-							if (m_entries[i].Hash == hashCode) return i;
-						}
-					}
-					return -1;
-				}
-			public:
-				Dictionary() {
-				}
-
-				Dictionary(size_t Capticy) {
-					Initialize(Capticy);
-				}
-
-				Dictionary(Dictionary const&rhs) {
-					this->m_buckets = rhs.m_buckets;
-					this->m_entries = rhs.m_entries;
-					this->m_count = rhs.m_count;
-					this->m_freelist = rhs.m_freelist;
-					this->m_freecount = rhs.m_freecount;
-				}
-
-				Dictionary(Dictionary &&lhs)noexcept {
-					this->m_buckets = Move(lhs.m_buckets);
-					this->m_entries = Move(lhs.m_entries);
-					this->m_count = lhs.m_count;
-					this->m_freelist = lhs.m_freelist;
-					this->m_freecount = lhs.m_freecount;
-				}
-
-				Dictionary&operator=(Dictionary const&rhs) {
-					this->Clear();
-					this->m_buckets = rhs.m_buckets;
-					this->m_entries = rhs.m_entries;
-					this->m_count = rhs.m_count;
-					this->m_freelist = rhs.m_freelist;
-					this->m_freecount = rhs.m_freecount;
-					return *this;
-				}
-
-				Dictionary&operator=(Dictionary &&lhs)noexcept {
-					this->Clear();
-					this->m_buckets = Move(lhs.m_buckets);
-					this->m_entries = Move(lhs.m_entries);
-					this->m_count = lhs.m_count;
-					this->m_freelist = lhs.m_freelist;
-					this->m_freecount = lhs.m_freecount;
-					return *this;
-				}
-
-				//获得当前插入元素个数
-				inline size_t Count()const {
-					return m_count - m_freecount;
-				}
-				//插入元素
-				void Add(TKey const&Key, TValue const&Value) {
-					Insert(Key, Value, true);
-				}
-				//移除元素
-				bool Remove(TKey const&Key) {
-					if (m_buckets.Count() != 0) {
-						index_t hashCode = InnerGetHashCode(Key) & 0x7FFFFFFF;
-						index_t bucket = hashCode % m_buckets.Count();
-						index_t last = -1;
-						for (index_t i = m_buckets[bucket]; i >= 0; last = i, i = m_entries[i].Next) {
-							if (m_entries[i].Hash == hashCode) {
-								if (last < 0) {
-									m_buckets[bucket] = m_entries[i].Next;
-								}
-								else {
-									m_entries[last].Next = m_entries[i].Next;
-								}
-								m_entries[i].Clear();
-								m_entries[i].Hash = -1;
-								m_entries[i].Next = m_freelist;
-								m_freelist = i;
-								m_freecount++;
-								return true;
-							}
-						}
-					}
-					return false;
-				}
-				bool TryGet(TKey const&Key, TValue&Out)const {
-					index_t index = FindEntry(Key);
-					if (index < 0)
-						return false;
-					Out = *m_entries[index].Value;
-					return true;
-				}
-				//是否包含元素
-				bool Contains(TKey const&Key)const {
-					index_t index = FindEntry(Key);
-					if (index < 0)
-						return false;
-					return true;
-				}
-				//清空
-				void Clear() {
-					if (m_count > 0) {
-						m_buckets.Clear();
-						m_entries.Clear();
-						m_freelist = -1;
-						m_count = 0;
-						m_freecount = 0;
-					}
-				}
-				//operator[]
-				TValue const&operator[](TKey const&Key)const {
-					index_t index = FindEntry(Key);
-					if (index < 0)
-						HL::Exception::Throw<HL::Exception::KeyNotFoundException>();
-					return *m_entries[index].Value;
-				}
-				//operator[]
-				TValue &operator[](TKey const&Key) {
-					index_t index = FindEntry(Key);
-					if (index < 0)
-						HL::Exception::Throw<HL::Exception::KeyNotFoundException>();
-					return *m_entries[index].Value;
-				}
-				virtual void* ClonePtr()const final{
-					return new Dictionary(*this);
-				}
-				virtual uptr<Iteration::IEnumerator<ObservePair<TKey, TValue>>> GetEnumerator()const {
-					return Reference::newptr<DictionaryEnumerator<TKey, TValue>>(
-						const_cast<Entry*>(this->m_entries.GetData()), const_cast<Entry*>(this->m_entries.GetData() + this->m_entries.Count())
-						);
-				}
-				//析构
-				virtual ~Dictionary() {
-					m_entries.Clear();
-					m_buckets.Clear();
-				}
-			};
 		}
-		template<class TKey, class TValue>
-		struct Interface::EnumerableSupportInterface<Generic::Dictionary<TKey, TValue>>
-		{
-			typedef uptr<Iteration::Iterator<Generic::ObservePair<TKey, TValue>>> IteratorType;
-			typedef uptr<Iteration::Iterator<Generic::ObservePair<TKey, TValue const>>> ConstIteratorType;
-		};
 	}
 }

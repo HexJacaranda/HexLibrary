@@ -10,7 +10,7 @@ namespace HL
 		template<class R>struct RemoveLReference<R const volatile&> { typedef R const volatile T; };
 
 		template<class R>struct RemoveCLRLReference {
-			typedef R&& T;
+			typedef R T;
 		};
 		template<class R>struct RemoveCLRSign {
 			typedef R F;
@@ -33,7 +33,9 @@ namespace HL
 		template<class R>struct RemoveRReference { typedef R T; };
 		template<class R>struct RemoveRReference<R&&> { typedef R T; };
 
-
+		template<class R>struct RemoveReference { 
+			typedef typename RemoveLReference<typename RemoveRReference<R>::T>::T T;
+		};
 
 
 #ifdef _USE_RIGHT_VALUE_REFERENCE
@@ -295,7 +297,7 @@ namespace HL
 			enum { R = true };
 		};
 		//值类型判断及其特化
-		template<class T>struct IsValueType{ enum { R = false }; };
+		template<class T>struct IsValueType{ enum { R = std::is_pod<T>::value }; };
 		template<>struct IsValueType<int>{ enum { R = true }; };
 		template<>struct IsValueType<unsigned>{ enum { R = true }; };
 		template<>struct IsValueType<float>{ enum { R = true }; };
@@ -310,6 +312,7 @@ namespace HL
 		template<>struct IsValueType<wchar_t> { enum { R = true }; };
 		//所有指针当作值类型
 		template<class T>struct IsValueType<T*> { enum { R = true }; };
+
 
 		//基元类型判断及其特化
 		template<class T>struct IsPrimitiveType { enum { R = false }; };
@@ -534,9 +537,25 @@ namespace HL
 	namespace System
 	{
 		template<class T>
-		inline constexpr typename Template::RemoveLReference<T>::T&& Forward(T&&Arg)noexcept
+		inline constexpr typename Template::RemoveLReference<T>::T&& Move(T&&Arg)noexcept
 		{
 			return static_cast<typename Template::RemoveLReference<T>::T&&>(Arg);
+		}
+		template<class T>
+		inline constexpr void Swap(T&Left, T&Right)noexcept {
+			T inter(Move(Left));
+			Left = Move(Right);
+			Right = Move(inter);
+		}
+		template<class T>
+		inline constexpr T&& Forward(typename Template::RemoveReference<T>::T &&Arg)noexcept
+		{
+			return static_cast<T&&>(Arg);
+		}
+		template<class T>
+		inline constexpr T&& Forward(typename Template::RemoveReference<T>::T &Arg)noexcept
+		{
+			return static_cast<T&&>(Arg);
 		}
 	}
 }
